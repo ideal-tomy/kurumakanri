@@ -1,0 +1,28 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase
+supabase/.branches
+supabase/.temp
+supabase/seed.lock
+
+# Playwright
+playwright-report/
+test-results/

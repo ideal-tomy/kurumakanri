@@ -1,0 +1,185 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { requireStaff } from '@/lib/auth';
+import { getServerSupabase } from '@/lib/supabase/server';
+import { writeAudit } from '@/lib/audit';
+
+const customerSchema = z.object({
+  name: z.string().min(1, '氏名は必須です'),
+  furigana: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email().optional().or(z.literal('').transform(() => null)).nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const vehicleSchema = z.object({
+  maker: z.string().min(1, 'メーカーは必須です'),
+  model: z.string().min(1, '車種は必須です'),
+  plate: z.string().min(1, 'ナンバーは必須です'),
+  vin: z.string().optional().nullable(),
+  inspection_expire_date: z.string().min(1, '満了日は必須です'),
+  initial_mileage: z.coerce.number().int().nonnegative().default(0),
+  monthly_avg_km: z.coerce.number().int().nonnegative().optional().nullable(),
+  last_oil_change_mileage: z.coerce.number().int().nonnegative().optional().nullable(),
+  last_oil_change_at: z.string().optional().nullable(),
+  oil_interval_km: z.coerce.number().int().positive().default(4000),
+});
+
+function nullable(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  return v === '' ? null : v;
+}
+
+export async function createCustomerAction(formData: FormData) {
+  const ctx = await requireStaff();
+  const supabase = getServerSupabase();
+
+  const customerData = customerSchema.parse({
+    name: formData.get('name') ?? '',
+    furigana: nullable(formData.get('furigana')),
+    phone: nullable(formData.get('phone')),
+    email: nullable(formData.get('email')),
+    notes: nullable(formData.get('notes')),
+  });
+
+  const { data: customer, error } = await supabase
+    .from('customers')
+    .insert(customerData)
+    .select('id')
+    .single();
+  if (error || !customer) {
+    throw new Error(error?.message ?? '顧客の作成に失敗しました');
+  }
+
+  const hasVehicle = formData.get('with_vehicle') === 'on';
+  if (hasVehicle) {
+    const v = vehicleSchema.parse({
+      maker: formData.get('maker') ?? '',
+      model: formData.get('model') ?? '',
+      plate: formData.get('plate') ?? '',
+      vin: nullable(formData.get('vin')),
+      inspection_expire_date: formData.get('inspection_expire_date') ?? '',
+      initial_mileage: formData.get('initial_mileage') ?? 0,
+      monthly_avg_km: nullable(formData.get('monthly_avg_km')),
+      last_oil_change_mileage: nullable(formData.get('last_oil_change_mileage')),
+      last_oil_change_at: nullable(formData.get('last_oil_change_at')),
+      oil_interval_km: formData.get('oil_interval_km') ?? 4000,
+    });
+    await supabase.from('vehicles').insert({
+      ...v,
+      customer_id: customer.id,
+    });
+  }
+
+  // 配信同意を初期化（既定 true）
+  await supabase.from('consents').insert([
+    { customer_id: customer.id, channel: 'LINE', opt_in: true, source: 'create' },
+    { customer_id: customer.id, channel: 'MAIL', opt_in: true, source: 'create' },
+  ]);
+
+  await writeAudit({
+    userId: ctx.userId,
+    action: 'customer.create',
+    resource: 'customers',
+    resourceId: customer.id,
+    payload: { name: customerData.name },
+  });
+
+  revalidatePath('/customers');
+  redirect(`/customers/${customer.id}`);
+}
+
+export async function updateCustomerAction(customerId: string, formData: FormData) {
+  const ctx = await requireStaff();
+  const supabase = getServerSupabase();
+  const data = customerSchema.parse({
+    name: formData.get('name') ?? '',
+    furigana: nullable(formData.get('furigana')),
+    phone: nullable(formData.get('phone')),
+    email: nullable(formData.get('email')),
+    notes: nullable(formData.get('notes')),
+  });
+  const { error } = await supabase.from('customers').update(data).eq('id', customerId);
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    userId: ctx.userId,
+    action: 'customer.update',
+    resource: 'customers',
+    resourceId: customerId,
+    payload: data,
+  });
+
+  revalidatePath(`/customers/${customerId}`);
+  revalidatePath('/customers');
+}
+
+export async function upsertVehicleAction(customerId: string, vehicleId: string | null, formData: FormData) {
+  const ctx = await requireStaff();
+  const supabase = getServerSupabase();
+  const data = vehicleSchema.parse({
+    maker: formData.get('maker') ?? '',
+    model: formData.get('model') ?? '',
+    plate: formData.get('plate') ?? '',
+    vin: nullable(formData.get('vin')),
+    inspection_expire_date: formData.get('inspection_expire_date') ?? '',
+    initial_mileage: formData.get('initial_mileage') ?? 0,
+    monthly_avg_km: nullable(formData.get('monthly_avg_km')),
+    last_oil_change_mileage: nullable(formData.get('last_oil_change_mileage')),
+    last_oil_change_at: nullable(formData.get('last_oil_change_at')),
+    oil_interval_km: formData.get('oil_interval_km') ?? 4000,
+  });
+
+  if (vehicleId) {
+    const { error } = await supabase.from('vehicles').update(data).eq('id', vehicleId);
+    if (error) throw new Error(error.message);
+    await writeAudit({
+      userId: ctx.userId,
+      action: 'vehicle.update',
+      resource: 'vehicles',
+      resourceId: vehicleId,
+      payload: data,
+    });
+  } else {
+    const { error } = await supabase.from('vehicles').insert({ ...data, customer_id: customerId });
+    if (error) throw new Error(error.message);
+    await writeAudit({
+      userId: ctx.userId,
+      action: 'vehicle.create',
+      resource: 'vehicles',
+      resourceId: customerId,
+      payload: data,
+    });
+  }
+
+  revalidatePath(`/customers/${customerId}`);
+}
+
+export async function updateConsentAction(customerId: string, formData: FormData) {
+  const ctx = await requireStaff();
+  const supabase = getServerSupabase();
+  const lineOptIn = formData.get('line_opt_in') === 'on';
+  const mailOptIn = formData.get('mail_opt_in') === 'on';
+
+  await supabase.from('consents').upsert(
+    [
+      { customer_id: customerId, channel: 'LINE', opt_in: lineOptIn, opt_out_at: lineOptIn ? null : new Date().toISOString(), source: 'staff_edit' },
+      { customer_id: customerId, channel: 'MAIL', opt_in: mailOptIn, opt_out_at: mailOptIn ? null : new Date().toISOString(), source: 'staff_edit' },
+    ],
+    { onConflict: 'customer_id,channel' },
+  );
+
+  await writeAudit({
+    userId: ctx.userId,
+    action: 'consent.update',
+    resource: 'consents',
+    resourceId: customerId,
+    payload: { LINE: lineOptIn, MAIL: mailOptIn },
+  });
+
+  revalidatePath(`/customers/${customerId}`);
+}
