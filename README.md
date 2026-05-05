@@ -65,6 +65,8 @@ SQL Editor で以下を **この順番で** 実行してください。
 2. `supabase/migrations/0002_views_and_helpers.sql`
 3. `supabase/migrations/0003_rls.sql`
 4. `supabase/migrations/0004_audit_logs_insert_policy.sql`
+5. `supabase/migrations/0005_priority_tasks.sql`
+6. `supabase/migrations/0006_hotfix_priority_and_rls.sql`
 
 ## 初回スタッフユーザーの作成
 
@@ -117,6 +119,20 @@ select public.is_active_staff();
 - `RESEND_API_KEY` / `MAIL_FROM`
 - `OPT_OUT_SECRET`
 - `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_OPS_MANAGER_CONTACT`（障害時連絡先表示）
+
+## 週次運用（本番）
+
+- 体制: 担当者1名 + バックアップ1名
+- 頻度: 毎週
+- ルール:
+  - 対応済みは送信対象に含めない
+  - 障害時は管理者へ連絡
+- 操作:
+  1. `/priorities` の「今週の送信候補」を確認
+  2. 送信/対応後、手動タスクを完了に更新
+  3. `/notifications/logs` で FAILED を再送
+  4. 再送でも失敗する場合は管理者へエスカレーション
 
 ## スクリプト
 
@@ -127,6 +143,18 @@ select public.is_active_staff();
 | `npm test` | Vitest 単体テスト |
 | `supabase db reset` | DB をマイグレーション + seed で初期化 |
 
+## 優先ワークキュー（新設）
+
+- 画面: `/priorities`
+- 用途:
+  - 自動抽出（車検/オイルの連絡候補）
+  - 手動タスク（電話・フォロー・見積など）
+  - 並び替え（優先度 / 時系列）とフィルタ（自動/手動/未完了/完了）
+- 操作:
+  - 画面上部フォームから手動タスクを追加
+  - 一覧行から `着手` / `完了` を更新
+  - 顧客リンクや電話リンクから実務へ遷移
+
 ## 設計資料
 
 - [要件定義.md](要件定義.md)
@@ -134,6 +162,9 @@ select public.is_active_staff();
 - `docs/account-checklist.md` … クライアント側アカウント準備（1ページ）
 - `docs/acceptance-checklist.md` … 受入会チェックリスト
 - `docs/verification-report.md` … 開発側事前確認ログ
+- `docs/weekly-ops-runbook.md` … 週次運用手順
+- `docs/incident-escalation-flow.md` … 障害時対応フロー
+- `docs/production-rehearsal-checklist.md` … 本番移行リハーサル手順
 
 ## `files/` からの取り込み方針
 

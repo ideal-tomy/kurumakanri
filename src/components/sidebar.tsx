@@ -15,6 +15,7 @@ const items: Array<{
   group: 'main' | 'lists' | 'settings';
 }> = [
   { href: '/dashboard', label: 'ダッシュボード', icon: 'dashboard', group: 'main' },
+  { href: '/priorities', label: '優先', icon: 'bell', group: 'main' },
   { href: '/customers', label: '顧客一覧', icon: 'users', group: 'main' },
   { href: '/lists/shaken-180', label: '車検半年前', icon: 'list', group: 'lists' },
   { href: '/lists/shaken-90', label: '車検3か月前', icon: 'list', group: 'lists' },

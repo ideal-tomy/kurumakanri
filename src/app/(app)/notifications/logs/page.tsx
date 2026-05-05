@@ -66,6 +66,8 @@ export default async function LogsPage({
       },
     logs: logsByJob.get(j.id) ?? [],
   }));
+  const failedCount = merged.filter((row) => row.status === 'FAILED').length;
+  const managerContact = process.env.NEXT_PUBLIC_OPS_MANAGER_CONTACT ?? '管理者';
 
   return (
     <>
@@ -73,6 +75,7 @@ export default async function LogsPage({
         <div>
           <h1 className="page-title">配信履歴</h1>
           <div className="page-sub">最新200件 / 失敗ジョブの再送が可能です</div>
+          <div className="page-sub">FAILED {failedCount}件。障害時連絡先: {managerContact}</div>
         </div>
       </div>
       <LogsTable rows={merged} initial={searchParams} />

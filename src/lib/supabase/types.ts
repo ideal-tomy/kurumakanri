@@ -30,6 +30,8 @@ export type QuoteStatus =
   | 'CANCELLED';
 export type RuleKind = 'SHAKEN_DAYS_BEFORE' | 'OIL_KM_INTERVAL';
 export type UserRole = 'ADMIN' | 'STAFF';
+export type TaskType = 'CALL' | 'FOLLOWUP' | 'QUOTE' | 'OTHER';
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
 
 export interface CustomerRow {
   id: string;
@@ -175,4 +177,41 @@ export interface ServiceHistoryRow {
   mileage: number | null;
   notes: string | null;
   created_at: string;
+}
+
+export interface StaffTaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  task_type: TaskType;
+  status: TaskStatus;
+  priority: number;
+  due_at: string | null;
+  scheduled_at: string | null;
+  customer_id: string | null;
+  vehicle_id: string | null;
+  assigned_to: string | null;
+  created_by: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PriorityQueueRow {
+  queue_id: string;
+  source_type: 'AUTO' | 'MANUAL';
+  task_id: string | null;
+  task_type: TaskType;
+  status: TaskStatus;
+  priority: number;
+  sort_due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  title: string;
+  description: string;
+  customer_id: string | null;
+  vehicle_id: string | null;
+  customer_name: string | null;
+  phone: string | null;
+  plate: string | null;
 }

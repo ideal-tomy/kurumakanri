@@ -7,12 +7,14 @@ export const dynamic = 'force-dynamic';
 
 async function getCounts() {
   const supabase = getServerSupabase();
-  const [s180, s90, oil] = await Promise.all([
+  const [s180, s90, oil, priorities] = await Promise.all([
     supabase.from('v_targets_shaken_180').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_targets_shaken_90').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_targets_oil').select('customer_id', { count: 'exact', head: true }),
+    supabase.from('v_priority_queue').select('queue_id', { count: 'exact', head: true }).in('status', ['OPEN', 'IN_PROGRESS']),
   ]);
   return [
+    { href: '/priorities', count: priorities.count ?? 0 },
     { href: '/lists/shaken-180', count: s180.count ?? 0 },
     { href: '/lists/shaken-90', count: s90.count ?? 0 },
     { href: '/lists/oil', count: oil.count ?? 0 },

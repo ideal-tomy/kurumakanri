@@ -12,6 +12,17 @@ type RowItem = NotificationJobRow & {
   logs: Pick<NotificationLogRow, 'id' | 'result' | 'sent_at' | 'provider_message_id' | 'error_message'>[];
 };
 
+function retryHint(rawError: string | null | undefined): string {
+  const e = (rawError ?? '').toUpperCase();
+  if (!e) return '-';
+  if (e.includes('NO_LINE_USER_ID')) return 'LINE未紐付。顧客に友だち追加/紐付け依頼後に再送';
+  if (e.includes('MISSING_LINE_ACCESS_TOKEN')) return '環境変数不足。管理者へ連絡';
+  if (e.includes('HTTP_401') || e.includes('HTTP_403')) return '認証/権限エラー。管理者へ連絡してトークン再設定';
+  if (e.includes('HTTP_429')) return 'レート制限。時間を空けて再送';
+  if (e.includes('NETWORK')) return '一時通信エラー。5分後に再送';
+  return '再送で改善しない場合は管理者へ連絡';
+}
+
 export function LogsTable({
   rows,
   initial,
@@ -120,12 +131,13 @@ export function LogsTable({
               <th>状態</th>
               <th>結果</th>
               <th>エラー</th>
+              <th>運用ガイド</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <div className="empty">該当ジョブがありません</div>
                 </td>
               </tr>
@@ -166,6 +178,11 @@ export function LogsTable({
                     <td style={{ maxWidth: 280 }}>
                       <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
                         {r.last_error ?? lastLog?.error_message ?? '-'}
+                      </span>
+                    </td>
+                    <td style={{ maxWidth: 280 }}>
+                      <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                        {retryHint(r.last_error ?? lastLog?.error_message)}
                       </span>
                     </td>
                   </tr>

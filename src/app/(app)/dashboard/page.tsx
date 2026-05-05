@@ -11,7 +11,12 @@ export const dynamic = 'force-dynamic';
 
 async function loadKpis() {
   const supabase = getServerSupabase();
-  const [vehicles, w90, w180, quotes] = await Promise.all([
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  const day = weekStart.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  weekStart.setDate(weekStart.getDate() - diff);
+  const [vehicles, w90, w180, quotes, weeklyCandidates, failedWeekly] = await Promise.all([
     supabase.from('vehicles').select('id', { count: 'exact', head: true }),
     supabase.from('v_targets_shaken_90').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_targets_shaken_180').select('customer_id', { count: 'exact', head: true }),
@@ -19,12 +24,24 @@ async function loadKpis() {
       .from('quotes')
       .select('id', { count: 'exact', head: true })
       .gte('issued_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    supabase
+      .from('v_priority_queue')
+      .select('queue_id', { count: 'exact', head: true })
+      .eq('source_type', 'AUTO')
+      .in('status', ['OPEN', 'IN_PROGRESS']),
+    supabase
+      .from('notification_jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'FAILED')
+      .gte('created_at', weekStart.toISOString()),
   ]);
   return {
     vehicles: vehicles.count ?? 0,
     within90: w90.count ?? 0,
     within180: w180.count ?? 0,
     quotesThisMonth: quotes.count ?? 0,
+    weeklyCandidates: weeklyCandidates.count ?? 0,
+    failedWeekly: failedWeekly.count ?? 0,
   };
 }
 
@@ -51,6 +68,7 @@ async function loadRecentLogs() {
 }
 
 export default async function DashboardPage() {
+  const managerContact = process.env.NEXT_PUBLIC_OPS_MANAGER_CONTACT ?? '管理者';
   const [kpis, upcoming, logs] = await Promise.all([
     loadKpis(),
     loadUpcoming(),
@@ -65,8 +83,12 @@ export default async function DashboardPage() {
           <div className="page-sub">
             車検期限と通知運用の状況を一覧できます
           </div>
+          <div className="page-sub">週次運用: 担当1名 + バックアップ1名 / 障害時連絡先: {managerContact}</div>
         </div>
         <div className="page-actions">
+          <Link href="/priorities" className="btn">
+            優先を開く
+          </Link>
           <Link href="/customers/new" className="btn btn-primary">
             + 顧客を追加
           </Link>
@@ -78,6 +100,8 @@ export default async function DashboardPage() {
         <Kpi label="90日以内" value={kpis.within90} unit="件" trend="warn" />
         <Kpi label="180日以内" value={kpis.within180} unit="件" />
         <Kpi label="今月の見積発行" value={kpis.quotesThisMonth} unit="件" />
+        <Kpi label="今週送信候補" value={kpis.weeklyCandidates} unit="件" trend="warn" />
+        <Kpi label="今週FAILED" value={kpis.failedWeekly} unit="件" trend={kpis.failedWeekly > 0 ? 'warn' : undefined} />
       </div>
 
       <div className="content-grid">

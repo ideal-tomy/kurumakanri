@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   let queued = 0;
   let sent = 0;
   let failed = 0;
-  const results = [] as unknown[];
+  const results = [] as Awaited<ReturnType<typeof dispatchNotification>>[];
 
   for (const customerId of parsed.data.customer_ids) {
     for (const channel of channels) {
@@ -52,6 +52,14 @@ export async function POST(req: Request) {
     }
   }
 
+  const failedByCode = results
+    .filter((result) => result.status === 'FAILED')
+    .reduce<Record<string, number>>((acc, result) => {
+      const key = result.errorCode ?? 'UNKNOWN';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+
   await writeAudit({
     userId: ctx.userId,
     action: 'notification.manual_send',
@@ -62,8 +70,9 @@ export async function POST(req: Request) {
       customers: parsed.data.customer_ids.length,
       sent,
       failed,
+      failedByCode,
     },
   });
 
-  return NextResponse.json({ queued, sent, failed, results });
+  return NextResponse.json({ queued, sent, failed, failedByCode, results });
 }

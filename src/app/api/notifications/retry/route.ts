@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'no jobs' }, { status: 404 });
   }
 
-  const results = [] as unknown[];
+  const results = [] as Awaited<ReturnType<typeof dispatchNotification>>[];
   for (const job of jobs as NotificationJobRow[]) {
     const channel = parsed.data.channel_override ?? job.channel;
     const ruleKey =
@@ -44,12 +44,24 @@ export async function POST(req: Request) {
     results.push(result);
   }
 
+  const failedByCode = results
+    .filter((result) => result.status === 'FAILED')
+    .reduce<Record<string, number>>((acc, result) => {
+      const key = result.errorCode ?? 'UNKNOWN';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+
   await writeAudit({
     userId: ctx.userId,
     action: 'notification.retry',
     resource: 'notification_jobs',
-    payload: { count: jobs.length, channelOverride: parsed.data.channel_override ?? null },
+    payload: {
+      count: jobs.length,
+      channelOverride: parsed.data.channel_override ?? null,
+      failedByCode,
+    },
   });
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ results, failedByCode });
 }

@@ -1,8 +1,10 @@
 -- =====================================================================
--- 推定走行距離関数 + 抽出ビュー
+-- Hotfix:
+-- 1) estimated_mileage の日数計算を修正
+-- 2) staff_profiles のRLS再帰を解消
+-- 3) v_targets_* ビューを再作成（0002失敗環境向け）
 -- =====================================================================
 
--- 月平均走行 km と初期入力日時から、現在時点の推定走行距離を返す
 create or replace function public.estimated_mileage(
   initial_mileage integer,
   initial_recorded_at date,
@@ -23,16 +25,46 @@ as $$
          );
 $$;
 
--- 残日数を返す
-create or replace function public.days_until(target_date date, as_of date default current_date)
+create or replace function public.days_until(target_date date)
 returns integer
 language sql
 immutable
 as $$
-  select (target_date - as_of)::integer;
+  select (target_date - current_date);
 $$;
 
--- ----- ビュー: 顧客 + 車両 + 推定走行 + 残日数 -----
+create or replace function public.is_admin_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.staff_profiles
+    where user_id = auth.uid() and role = 'ADMIN' and active
+  );
+$$;
+
+drop policy if exists staff_profiles_admin_all on public.staff_profiles;
+drop policy if exists staff_profiles_admin_insert on public.staff_profiles;
+drop policy if exists staff_profiles_admin_update on public.staff_profiles;
+drop policy if exists staff_profiles_admin_delete on public.staff_profiles;
+
+create policy staff_profiles_admin_insert on public.staff_profiles
+  for insert to authenticated
+  with check (public.is_admin_staff());
+
+create policy staff_profiles_admin_update on public.staff_profiles
+  for update to authenticated
+  using (public.is_admin_staff())
+  with check (public.is_admin_staff());
+
+create policy staff_profiles_admin_delete on public.staff_profiles
+  for delete to authenticated
+  using (public.is_admin_staff());
+
 create or replace view public.v_customer_overview as
 select
   c.id as customer_id,
@@ -59,7 +91,6 @@ select
 from public.customers c
 left join public.vehicles v on v.customer_id = c.id;
 
--- ----- ビュー: 車検180日前リスト -----
 create or replace view public.v_targets_shaken_180 as
 select o.*
 from public.v_customer_overview o
@@ -72,7 +103,6 @@ where o.status = 'ACTIVE'
   and o.days_until_inspection between 150 and 210
   and (coalesce(cn_line.opt_in, true) or coalesce(cn_mail.opt_in, true));
 
--- ----- ビュー: 車検90日前リスト -----
 create or replace view public.v_targets_shaken_90 as
 select o.*
 from public.v_customer_overview o
@@ -85,7 +115,6 @@ where o.status = 'ACTIVE'
   and o.days_until_inspection between 60 and 100
   and (coalesce(cn_line.opt_in, true) or coalesce(cn_mail.opt_in, true));
 
--- ----- ビュー: オイル交換目安リスト -----
 create or replace view public.v_targets_oil as
 select
   o.*,

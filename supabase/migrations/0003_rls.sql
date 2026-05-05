@@ -9,24 +9,36 @@
 -- staff_profile: 自分の行は全員 read、管理者のみ write
 alter table public.staff_profiles enable row level security;
 
+create or replace function public.is_admin_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.staff_profiles
+    where user_id = auth.uid() and role = 'ADMIN' and active
+  );
+$$;
+
 create policy staff_profiles_self_read on public.staff_profiles
   for select to authenticated
   using (auth.uid() = user_id);
 
-create policy staff_profiles_admin_all on public.staff_profiles
-  for all to authenticated
-  using (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  );
+create policy staff_profiles_admin_insert on public.staff_profiles
+  for insert to authenticated
+  with check (public.is_admin_staff());
+
+create policy staff_profiles_admin_update on public.staff_profiles
+  for update to authenticated
+  using (public.is_admin_staff())
+  with check (public.is_admin_staff());
+
+create policy staff_profiles_admin_delete on public.staff_profiles
+  for delete to authenticated
+  using (public.is_admin_staff());
 
 -- ヘルパ: 認証済みかつ active なスタッフかどうか
 create or replace function public.is_active_staff()
@@ -73,18 +85,8 @@ create policy notification_rules_staff_read on public.notification_rules
   using (public.is_active_staff());
 create policy notification_rules_admin_write on public.notification_rules
   for all to authenticated
-  using (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  );
+  using (public.is_admin_staff())
+  with check (public.is_admin_staff());
 
 alter table public.template_versions enable row level security;
 create policy template_versions_staff_read on public.template_versions
@@ -92,18 +94,8 @@ create policy template_versions_staff_read on public.template_versions
   using (public.is_active_staff());
 create policy template_versions_admin_write on public.template_versions
   for all to authenticated
-  using (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.staff_profiles me
-      where me.user_id = auth.uid() and me.role = 'ADMIN' and me.active
-    )
-  );
+  using (public.is_admin_staff())
+  with check (public.is_admin_staff());
 
 alter table public.notification_jobs enable row level security;
 create policy notification_jobs_staff_all on public.notification_jobs
