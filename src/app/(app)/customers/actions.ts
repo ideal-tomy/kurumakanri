@@ -13,6 +13,14 @@ const customerSchema = z.object({
   phone: z.string().optional().nullable(),
   email: z.string().email().optional().or(z.literal('').transform(() => null)).nullable(),
   notes: z.string().optional().nullable(),
+  line_user_id: z
+    .string()
+    .regex(
+      /^U[0-9a-f]{32,}$/i,
+      'LINE userId は U で始まる ID を指定してください',
+    )
+    .nullable()
+    .optional(),
 });
 
 const vehicleSchema = z.object({
@@ -44,6 +52,7 @@ export async function createCustomerAction(formData: FormData) {
     phone: nullable(formData.get('phone')),
     email: nullable(formData.get('email')),
     notes: nullable(formData.get('notes')),
+    line_user_id: nullable(formData.get('line_user_id')),
   });
 
   const { data: customer, error } = await supabase
@@ -52,6 +61,9 @@ export async function createCustomerAction(formData: FormData) {
     .select('id')
     .single();
   if (error || !customer) {
+    if (error && (error as { code?: string }).code === '23505') {
+      throw new Error('指定された LINE userId は既に他の顧客に登録されています');
+    }
     throw new Error(error?.message ?? '顧客の作成に失敗しました');
   }
 
@@ -102,9 +114,15 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
     phone: nullable(formData.get('phone')),
     email: nullable(formData.get('email')),
     notes: nullable(formData.get('notes')),
+    line_user_id: nullable(formData.get('line_user_id')),
   });
   const { error } = await supabase.from('customers').update(data).eq('id', customerId);
-  if (error) throw new Error(error.message);
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      throw new Error('指定された LINE userId は既に他の顧客に登録されています');
+    }
+    throw new Error(error.message);
+  }
 
   await writeAudit({
     userId: ctx.userId,

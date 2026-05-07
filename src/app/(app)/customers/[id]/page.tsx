@@ -110,6 +110,18 @@ export default async function CustomerDetailPage({ params }: PageProps) {
                 <label className="form-label">メールアドレス</label>
                 <input className="input" name="email" defaultValue={customer.email ?? ''} />
               </div>
+              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">LINE userId</label>
+                <input
+                  className="input"
+                  name="line_user_id"
+                  defaultValue={customer.line_user_id ?? ''}
+                  placeholder="U で始まる ID（LINE Webhook で受信した値）"
+                />
+                <div className="cust-meta">
+                  未紐付けの場合は <a href="/line/unmatched" className="panel-link">LINE 未マッチ一覧</a> から結びつけできます
+                </div>
+              </div>
             </div>
             <div className="form-field">
               <label className="form-label">備考</label>

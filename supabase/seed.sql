@@ -184,3 +184,100 @@ begin
          now()
     from public.vehicles v;
 end $$;
+
+-- =====================================================================
+-- クライアント向けプレゼン用デモ顧客 10 名
+-- - 固定 UUID のため supabase db reset 後も同じ ID で再現できる
+-- - line_user_id は NULL（既存の「LINEテスト顧客」などの LINE 連携検証用 ID は上書きしない）
+-- - 車検 180日 / 90日 / 期限切れ / オイル目安 など一覧が埋まるよう日付・走行距離をばらしている
+-- =====================================================================
+
+insert into public.customers (id, name, furigana, phone, email, line_user_id, status, notes)
+values
+  ('10000000-0000-4000-8000-000000000001'::uuid, '【デモ】小林 一郎', 'コバヤシ イチロウ', '090-1000-0001', 'demo01@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000002'::uuid, '【デモ】加藤 恵子', 'カトウ ケイコ', '090-1000-0002', 'demo02@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000003'::uuid, '【デモ】吉田 翔太', 'ヨシダ ショウタ', '090-1000-0003', 'demo03@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000004'::uuid, '【デモ】山田 花子', 'ヤマダ ハナコ', '090-1000-0004', 'demo04@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000005'::uuid, '【デモ】佐々木 誠', 'ササキ マコト', '090-1000-0005', 'demo05@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000006'::uuid, '【デモ】井上 麻衣', 'イノウエ マイ', '090-1000-0006', 'demo06@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000007'::uuid, '【デモ】木村 拓海', 'キムラ タクミ', '090-1000-0007', 'demo07@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000008'::uuid, '【デモ】林 千夏', 'ハヤシ チナツ', '090-1000-0008', 'demo08@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-000000000009'::uuid, '【デモ】清水 隆', 'シミズ タカシ', '090-1000-0009', 'demo09@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）'),
+  ('10000000-0000-4000-8000-00000000000a'::uuid, '【デモ】森 優子', 'モリ ユウコ', '090-1000-0010', 'demo10@demo.local', null, 'ACTIVE', 'クライアント説明用デモ（削除可）')
+on conflict (id) do nothing;
+
+-- 車両（同一 seed 再実行時はデモ顧客の車両を差し替え）
+delete from public.vehicles v
+where v.customer_id in (
+  '10000000-0000-4000-8000-000000000001'::uuid,
+  '10000000-0000-4000-8000-000000000002'::uuid,
+  '10000000-0000-4000-8000-000000000003'::uuid,
+  '10000000-0000-4000-8000-000000000004'::uuid,
+  '10000000-0000-4000-8000-000000000005'::uuid,
+  '10000000-0000-4000-8000-000000000006'::uuid,
+  '10000000-0000-4000-8000-000000000007'::uuid,
+  '10000000-0000-4000-8000-000000000008'::uuid,
+  '10000000-0000-4000-8000-000000000009'::uuid,
+  '10000000-0000-4000-8000-00000000000a'::uuid
+);
+
+insert into public.vehicles (
+  customer_id, maker, model, plate, vin,
+  inspection_expire_date, initial_mileage, initial_mileage_recorded_at,
+  monthly_avg_km, last_oil_change_mileage, last_oil_change_at, oil_interval_km
+)
+select * from (values
+  -- 車検 180日帯（残日数 150〜210）
+  ('10000000-0000-4000-8000-000000000001'::uuid, 'トヨタ', 'ヤリス', '横浜 301 あ 1001', 'DEMO-VIN-001', current_date + 175, 35000, current_date - 120, 700, 31000, current_date - 100, 4000),
+  ('10000000-0000-4000-8000-000000000002'::uuid, 'ホンダ', 'ヴェゼル', '横浜 302 い 2002', 'DEMO-VIN-002', current_date + 190, 52000, current_date - 200, 850, 48000, current_date - 60, 4000),
+  -- 車検 90日帯（残日数 60〜100）
+  ('10000000-0000-4000-8000-000000000003'::uuid, '日産', 'ノート', '横浜 303 う 3003', 'DEMO-VIN-003', current_date + 75, 41000, current_date - 90, 600, 37000, current_date - 120, 4000),
+  ('10000000-0000-4000-8000-000000000004'::uuid, 'マツダ', 'MAZDA3', '横浜 304 え 4004', 'DEMO-VIN-004', current_date + 88, 61000, current_date - 150, 1100, 56500, current_date - 45, 4000),
+  -- 期限切れ（フィルタ「期限切れ」で確認）
+  ('10000000-0000-4000-8000-000000000005'::uuid, 'スバル', 'インプレッサ', '横浜 305 お 5005', 'DEMO-VIN-005', current_date - 12, 48000, current_date - 400, 800, 44500, current_date - 200, 4000),
+  -- まだ先（一覧の「通常」確認用）
+  ('10000000-0000-4000-8000-000000000006'::uuid, '三菱', 'アウトランダー', '横浜 306 か 6006', 'DEMO-VIN-006', current_date + 320, 72000, current_date - 300, 900, 68500, current_date - 30, 4000),
+  -- オイル交換目安リスト向け（推定走行が目安に近い）
+  ('10000000-0000-4000-8000-000000000007'::uuid, 'トヨタ', 'カローラ', '横浜 307 き 7007', 'DEMO-VIN-007', current_date + 240, 40000, current_date - 100, 950, 36200, current_date - 80, 4000),
+  ('10000000-0000-4000-8000-000000000008'::uuid, 'ホンダ', 'ステップワゴン', '横浜 308 く 8008', 'DEMO-VIN-008', current_date + 200, 55000, current_date - 120, 800, 51200, current_date - 50, 4000),
+  ('10000000-0000-4000-8000-000000000009'::uuid, 'レクサス', 'NX', '横浜 309 け 9009', 'DEMO-VIN-009', current_date + 165, 28000, current_date - 60, 500, 24200, current_date - 200, 4000),
+  ('10000000-0000-4000-8000-00000000000a'::uuid, 'ダイハツ', 'ロッキー', '横浜 310 こ 0010', 'DEMO-VIN-010', current_date + 92, 33000, current_date - 45, 750, 29200, current_date - 30, 4000)
+) as t(customer_id, maker, model, plate, vin, inspection_expire_date, initial_mileage, initial_mileage_recorded_at, monthly_avg_km, last_oil_change_mileage, last_oil_change_at, oil_interval_km)
+where exists (select 1 from public.customers c where c.id = t.customer_id);
+
+-- 配信同意
+insert into public.consents (customer_id, channel, opt_in, source)
+select id, 'LINE'::notification_channel, true, 'seed_demo_client'
+from public.customers
+where id between '10000000-0000-4000-8000-000000000001'::uuid and '10000000-0000-4000-8000-00000000000a'::uuid
+on conflict (customer_id, channel) do nothing;
+
+insert into public.consents (customer_id, channel, opt_in, source)
+select id, 'MAIL'::notification_channel, true, 'seed_demo_client'
+from public.customers
+where id between '10000000-0000-4000-8000-000000000001'::uuid and '10000000-0000-4000-8000-00000000000a'::uuid
+on conflict (customer_id, channel) do nothing;
+
+-- 見積（デモ顧客の車両のみ）
+insert into public.quotes (vehicle_id, quote_no, status, total_amount, legal_items, service_items, notes, valid_until, issued_at)
+select v.id,
+       'DEMO-' || replace(v.id::text, '-', ''),
+       'ISSUED',
+       73150,
+       '[
+         {"label": "自賠責保険料（24ヶ月）", "amount": 17650},
+         {"label": "重量税（エコカー減税適用）", "amount": 15000},
+         {"label": "印紙代", "amount": 1800}
+       ]'::jsonb,
+       '[
+         {"label": "24ヶ月点検基本料", "amount": 28000},
+         {"label": "ブレーキフルード交換", "amount": 4500},
+         {"label": "エンジンオイル交換", "amount": 6200}
+       ]'::jsonb,
+       'デモ用見積です。',
+       v.inspection_expire_date,
+       now()
+from public.vehicles v
+where v.customer_id between '10000000-0000-4000-8000-000000000001'::uuid and '10000000-0000-4000-8000-00000000000a'::uuid
+  and v.vin like 'DEMO-VIN-%'
+on conflict (quote_no) do nothing;

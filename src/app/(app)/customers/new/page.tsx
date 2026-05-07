@@ -2,7 +2,12 @@ import { createCustomerAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
-export default function NewCustomerPage() {
+interface NewCustomerPageProps {
+  searchParams?: { line_user_id?: string };
+}
+
+export default function NewCustomerPage({ searchParams }: NewCustomerPageProps) {
+  const initialLineUserId = searchParams?.line_user_id ?? '';
   return (
     <>
       <div className="page-header">
@@ -15,6 +20,11 @@ export default function NewCustomerPage() {
       <section className="panel" style={{ padding: 24 }}>
         <form action={createCustomerAction} className="form-grid">
           <h2 className="modal-section-title">顧客情報</h2>
+          {initialLineUserId && (
+            <div className="cust-meta" style={{ marginBottom: 8 }}>
+              LINE userId「{initialLineUserId}」を紐付けて登録します
+            </div>
+          )}
           <div className="form-row">
             <div className="form-field">
               <label className="form-label">氏名 *</label>
@@ -31,6 +41,15 @@ export default function NewCustomerPage() {
             <div className="form-field">
               <label className="form-label">メールアドレス</label>
               <input className="input" type="email" name="email" />
+            </div>
+            <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">LINE userId</label>
+              <input
+                className="input"
+                name="line_user_id"
+                defaultValue={initialLineUserId}
+                placeholder="U で始まる ID（任意）"
+              />
             </div>
           </div>
           <div className="form-field">

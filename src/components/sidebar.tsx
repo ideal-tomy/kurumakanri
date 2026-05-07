@@ -17,6 +17,7 @@ const items: Array<{
   { href: '/dashboard', label: 'ダッシュボード', icon: 'dashboard', group: 'main' },
   { href: '/priorities', label: '優先', icon: 'bell', group: 'main' },
   { href: '/customers', label: '顧客一覧', icon: 'users', group: 'main' },
+  { href: '/line/unmatched', label: 'LINE未マッチ', icon: 'users', group: 'main' },
   { href: '/lists/shaken-180', label: '車検半年前', icon: 'list', group: 'lists' },
   { href: '/lists/shaken-90', label: '車検3か月前', icon: 'list', group: 'lists' },
   { href: '/lists/oil', label: 'オイル交換目安', icon: 'list', group: 'lists' },

@@ -154,6 +154,13 @@ export interface StaffProfileRow {
   updated_at: string;
 }
 
+export interface LineUnmatchedRow {
+  line_user_id: string;
+  first_follow_at: string;
+  last_text: string | null;
+  last_message_at: string | null;
+}
+
 export interface QuoteRow {
   id: string;
   vehicle_id: string;

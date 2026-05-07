@@ -70,8 +70,24 @@ export async function POST(req: Request) {
         );
       }
     } else if (event.type === 'message') {
-      // メッセージ内に「紐付けコード:XXXX」を含む場合は line_user_id を更新する運用
       const text = event.message?.text ?? '';
+
+      // 未マッチ userId からのテキストは本文ごと audit_logs に保存し、
+      // 管理画面 (/line/unmatched) で経営者が顧客と突合できるようにする。
+      const { data: matched } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('line_user_id', userId)
+        .maybeSingle();
+      if (!matched && text) {
+        await supabase.from('audit_logs').insert({
+          action: 'line.message_unmatched',
+          resource: 'customers',
+          payload: { lineUserId: userId, text },
+        });
+      }
+
+      // 互換: 「紐付けコード:XXXX」を含む場合は記録のみ残す
       const m = text.match(/(?:紐付けコード|code)[:：]?\s*([A-Z0-9-]{4,})/i);
       if (m) {
         const code = m[1].toUpperCase();
