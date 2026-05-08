@@ -1,4 +1,6 @@
 import { getServerSupabase } from '@/lib/supabase/server';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import type { NotificationJobRow, NotificationLogRow } from '@/lib/supabase/types';
 import { LogsTable } from './logs-table';
 
@@ -71,6 +73,7 @@ export default async function LogsPage({
 
   return (
     <>
+      <PageBack href="/priorities" label="今日の連絡へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">配信履歴</h1>
@@ -79,6 +82,13 @@ export default async function LogsPage({
         </div>
       </div>
       <LogsTable rows={merged} initial={searchParams} />
+      <NextActions
+        items={[
+          { href: '/priorities', label: '今日の連絡', primary: true },
+          { href: '/templates', label: 'テンプレート' },
+          { href: '/customers', label: '顧客一覧' },
+        ]}
+      />
     </>
   );
 }

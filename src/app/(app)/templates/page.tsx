@@ -1,5 +1,7 @@
 import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge } from '@/components/badge';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import { formatDateTime } from '@/lib/format';
 import type { TemplateVersionRow } from '@/lib/supabase/types';
 
@@ -17,6 +19,7 @@ export default async function TemplatesPage() {
 
   return (
     <>
+      <PageBack href="/priorities" label="今日の連絡へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">テンプレート</h1>
@@ -71,6 +74,13 @@ export default async function TemplatesPage() {
           <code>{'{{bookingUrl}}'}</code> <code>{'{{unsubscribeUrl}}'}</code>
         </div>
       </section>
+
+      <NextActions
+        items={[
+          { href: '/notifications/logs', label: '配信履歴', primary: true },
+          { href: '/priorities', label: '今日の連絡' },
+        ]}
+      />
     </>
   );
 }

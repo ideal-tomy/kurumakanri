@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge } from '@/components/badge';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import { formatDate, formatYen } from '@/lib/format';
 import type { QuoteRow, VehicleRow } from '@/lib/supabase/types';
 import type { QuoteLineItem } from '@/lib/quote';
@@ -33,6 +35,10 @@ export default async function QuoteListPage({
 
   return (
     <>
+      <PageBack
+        href={`/customers/${vehicle.customer_id}`}
+        label="顧客詳細へ戻る"
+      />
       <div className="page-header">
         <div>
           <h1 className="page-title">
@@ -44,9 +50,6 @@ export default async function QuoteListPage({
         </div>
         <div className="page-actions">
           <GenerateButton vehicleId={vehicle.id} />
-          <Link href={`/customers/${vehicle.customer_id}`} className="btn">
-            ← 顧客へ
-          </Link>
         </div>
       </div>
 
@@ -55,6 +58,14 @@ export default async function QuoteListPage({
       ) : (
         quotes.map((q) => <QuoteCard key={q.id} quote={q} />)
       )}
+
+      <NextActions
+        items={[
+          { href: `/customers/${vehicle.customer_id}`, label: '顧客詳細へ戻る', primary: true },
+          { href: '/customers', label: '顧客一覧' },
+          { href: '/priorities', label: '今日の連絡' },
+        ]}
+      />
     </>
   );
 }

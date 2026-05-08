@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import { formatDateTime } from '@/lib/format';
 import type { CustomerRow, LineUnmatchedRow } from '@/lib/supabase/types';
 import { linkLineUserAction } from '../actions';
@@ -47,6 +49,7 @@ export default async function LineUnmatchedPage({
 
   return (
     <>
+      <PageBack href="/priorities" label="今日の連絡へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">LINE 未マッチ一覧</h1>
@@ -145,6 +148,14 @@ export default async function LineUnmatchedPage({
       <section style={{ marginTop: 16, color: 'var(--ink-3)', fontSize: 12 }}>
         ヒント: マッチ後は <code>customers.line_user_id</code> が更新され、本一覧から自動で外れます。
       </section>
+
+      <NextActions
+        items={[
+          { href: '/customers', label: '顧客一覧' },
+          { href: '/customers/new', label: '+ 顧客を追加', primary: true },
+          { href: '/priorities', label: '今日の連絡' },
+        ]}
+      />
     </>
   );
 }

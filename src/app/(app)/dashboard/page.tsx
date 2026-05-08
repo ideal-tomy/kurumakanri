@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge, priorityVariant } from '@/components/badge';
+import { NextActions } from '@/components/next-actions';
 import { formatDate, priorityLabel } from '@/lib/format';
 import type {
   CustomerOverviewRow,
   NotificationLogRow,
 } from '@/lib/supabase/types';
+import { getUrgencyLevel } from '@/lib/urgency';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,7 +114,8 @@ export default async function DashboardPage() {
               顧客一覧へ →
             </Link>
           </header>
-          <div className="table-wrap">
+          {/* PC: テーブル */}
+          <div className="table-wrap desktop-only">
             <table>
               <thead>
                 <tr>
@@ -172,6 +175,63 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
+
+          {/* モバイル: カード */}
+          <ul className="list-card-list mobile-only">
+            {upcoming.length === 0 ? (
+              <li className="empty" style={{ padding: 16 }}>
+                表示できる顧客がありません
+              </li>
+            ) : (
+              upcoming.map((row) => {
+                const urgency = getUrgencyLevel(row.days_until_inspection ?? null);
+                return (
+                  <li
+                    key={`${row.customer_id}-${row.vehicle_id}`}
+                    className={`list-card ${urgency}`}
+                  >
+                    <div className="list-card-row">
+                      <div className="list-card-main">
+                        <Link href={`/customers/${row.customer_id}`} className="list-card-name">
+                          {row.name}
+                        </Link>
+                        <div className="list-card-meta">{row.phone ?? '電話番号未登録'}</div>
+                        <div className="list-card-vehicle">
+                          <span>
+                            {row.maker} {row.model}
+                          </span>
+                          {row.plate && <span className="plate">{row.plate}</span>}
+                        </div>
+                      </div>
+                      <div className="list-card-side">
+                        <div className={`list-card-days ${urgency}`}>
+                          {priorityLabel(row.days_until_inspection)}
+                        </div>
+                        <div className="list-card-days-sub">
+                          {formatDate(row.inspection_expire_date) || '満了日未設定'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="list-card-actions">
+                      <Badge variant={priorityVariant(row.days_until_inspection)}>
+                        {priorityVariant(row.days_until_inspection) === 'danger'
+                          ? '緊急'
+                          : priorityVariant(row.days_until_inspection) === 'warn'
+                            ? '近接'
+                            : '余裕'}
+                      </Badge>
+                      <Link
+                        className="btn btn-sm list-card-cta"
+                        href={`/customers/${row.customer_id}`}
+                      >
+                        詳細
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })
+            )}
+          </ul>
         </section>
 
         <section className="panel">
@@ -181,7 +241,8 @@ export default async function DashboardPage() {
               すべて見る →
             </Link>
           </header>
-          <div className="table-wrap">
+          {/* PC: テーブル */}
+          <div className="table-wrap desktop-only">
             <table>
               <thead>
                 <tr>
@@ -221,8 +282,53 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
+
+          {/* モバイル: カード */}
+          <ul className="list-card-list mobile-only">
+            {logs.length === 0 ? (
+              <li className="empty" style={{ padding: 16 }}>
+                まだ送信履歴がありません
+              </li>
+            ) : (
+              logs.map((l) => (
+                <li key={l.id} className="list-card">
+                  <div className="list-card-row">
+                    <div className="list-card-main">
+                      <div className="list-card-name" style={{ fontSize: 14 }}>
+                        {formatDate(l.sent_at) || '送信日時不明'}
+                      </div>
+                      <div className="list-card-meta">{l.provider}</div>
+                    </div>
+                    <div className="list-card-side">
+                      <Badge
+                        variant={
+                          l.result === 'SUCCESS'
+                            ? 'success'
+                            : l.result === 'BOUNCED' || l.result === 'COMPLAINED'
+                              ? 'warn'
+                              : 'danger'
+                        }
+                      >
+                        {l.result}
+                      </Badge>
+                    </div>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
         </section>
       </div>
+
+      <NextActions
+        items={[
+          { href: '/priorities', label: '今日の連絡を見る', primary: true },
+          { href: '/customers', label: '顧客一覧' },
+          { href: '/customers/new', label: '+ 顧客を追加' },
+          { href: '/line/unmatched', label: 'LINE未マッチ' },
+          { href: '/notifications/logs', label: '配信履歴' },
+        ]}
+      />
     </>
   );
 }

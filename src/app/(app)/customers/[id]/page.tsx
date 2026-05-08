@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge, priorityVariant } from '@/components/badge';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import { formatDate, formatKm, formatYen, priorityLabel } from '@/lib/format';
 import {
   updateCustomerAction,
@@ -75,15 +77,11 @@ export default async function CustomerDetailPage({ params }: PageProps) {
 
   return (
     <>
+      <PageBack href="/customers" label="顧客一覧へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">{customer.name}</h1>
           <div className="page-sub">{customer.furigana ?? '-'}</div>
-        </div>
-        <div className="page-actions">
-          <Link href="/customers" className="btn">
-            ← 戻る
-          </Link>
         </div>
       </div>
 
@@ -256,6 +254,17 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </Badge>
         </section>
       )}
+
+      <NextActions
+        items={[
+          { href: '/customers', label: '顧客一覧へ戻る', primary: true },
+          { href: '/customers/new', label: '+ 別の顧客を追加' },
+          { href: '/priorities', label: '今日の連絡' },
+          ...(primaryVehicle
+            ? [{ href: `/quotes/${primaryVehicle.id}`, label: 'この車両の見積を見る' }]
+            : []),
+        ]}
+      />
     </>
   );
 }

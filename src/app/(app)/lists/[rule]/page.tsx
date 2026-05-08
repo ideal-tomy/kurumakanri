@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { PageBack } from '@/components/page-back';
+import { NextActions, type NextActionItem } from '@/components/next-actions';
 import { loadRuleTargets, RULE_LABELS, type RuleKey } from '@/lib/rules';
 import { TargetList } from './target-list';
 
@@ -9,6 +10,21 @@ const SLUG_TO_RULE: Record<string, RuleKey> = {
   'shaken-180': 'shaken_180days',
   'shaken-90': 'shaken_90days',
   oil: 'oil_4000km',
+};
+
+const OTHER_LISTS: Record<RuleKey, NextActionItem[]> = {
+  shaken_180days: [
+    { href: '/lists/shaken-90', label: '車検3か月前リスト' },
+    { href: '/lists/oil', label: 'オイル交換目安' },
+  ],
+  shaken_90days: [
+    { href: '/lists/shaken-180', label: '車検半年前リスト' },
+    { href: '/lists/oil', label: 'オイル交換目安' },
+  ],
+  oil_4000km: [
+    { href: '/lists/shaken-180', label: '車検半年前リスト' },
+    { href: '/lists/shaken-90', label: '車検3か月前リスト' },
+  ],
 };
 
 interface PageProps {
@@ -22,6 +38,7 @@ export default async function ListPage({ params }: PageProps) {
 
   return (
     <>
+      <PageBack href="/priorities" label="今日の連絡へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">{RULE_LABELS[ruleKey]}</h1>
@@ -29,14 +46,17 @@ export default async function ListPage({ params }: PageProps) {
             対象 {targets.length} 件 / チェックして手動送信できます
           </div>
         </div>
-        <div className="page-actions">
-          <Link href="/dashboard" className="btn">
-            ← ダッシュボード
-          </Link>
-        </div>
       </div>
 
       <TargetList rule={ruleKey} targets={targets} />
+
+      <NextActions
+        items={[
+          ...OTHER_LISTS[ruleKey],
+          { href: '/notifications/logs', label: '配信履歴' },
+          { href: '/priorities', label: '今日の連絡', primary: true },
+        ]}
+      />
     </>
   );
 }

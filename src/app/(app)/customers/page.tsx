@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge, priorityVariant } from '@/components/badge';
+import { PageBack } from '@/components/page-back';
+import { NextActions } from '@/components/next-actions';
 import { formatDate, formatKm, priorityLabel } from '@/lib/format';
 import type { CustomerOverviewRow } from '@/lib/supabase/types';
 import { getUrgencyLevel } from '@/lib/urgency';
@@ -45,6 +47,7 @@ export default async function CustomersPage({
 
   return (
     <>
+      <PageBack href="/priorities" label="今日の連絡へ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">顧客一覧</h1>
@@ -218,6 +221,14 @@ export default async function CustomersPage({
           )}
         </ul>
       </section>
+
+      <NextActions
+        items={[
+          { href: '/customers/new', label: '+ 顧客を追加', primary: true },
+          { href: '/priorities', label: '今日の連絡' },
+          { href: '/line/unmatched', label: 'LINE未マッチ' },
+        ]}
+      />
     </>
   );
 }
