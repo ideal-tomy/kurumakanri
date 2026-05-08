@@ -221,4 +221,7 @@ export interface PriorityQueueRow {
   customer_name: string | null;
   phone: string | null;
   plate: string | null;
+  /** /api/priorities が顧客テーブルを JOIN して付加するメタ。view 自体には含まれない。 */
+  line_user_id?: string | null;
+  vehicle_label?: string | null;
 }

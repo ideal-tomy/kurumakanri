@@ -8,6 +8,8 @@ const PROTECTED_PREFIXES = [
   '/lists',
   '/notifications',
   '/templates',
+  '/priorities',
+  '/line',
 ];
 
 const PUBLIC_PREFIXES = ['/login', '/u/', '/me', '/api/webhooks', '/api/public'];

@@ -7,6 +7,7 @@ import { Badge, priorityVariant } from '@/components/badge';
 import { useToast } from '@/components/toast';
 import { formatDate, formatKm, priorityLabel } from '@/lib/format';
 import type { RuleKey, RuleTarget } from '@/lib/rules';
+import { getUrgencyLevel } from '@/lib/urgency';
 
 type Channel = 'LINE' | 'MAIL' | 'BOTH';
 
@@ -111,6 +112,15 @@ export function TargetList({
         <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>
           選択中: {selected.size} / {filtered.length}
         </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={toggleAll}
+          disabled={filtered.length === 0}
+          aria-pressed={allChecked}
+        >
+          {allChecked ? '選択解除' : '全選択'}
+        </button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             className="btn btn-primary"
@@ -122,7 +132,8 @@ export function TargetList({
         </div>
       </div>
 
-      <div className="table-wrap">
+      {/* PC: テーブル表示 */}
+      <div className="table-wrap desktop-only">
         <table>
           <thead>
             <tr>
@@ -214,6 +225,74 @@ export function TargetList({
           </tbody>
         </table>
       </div>
+
+      {/* モバイル: カードリスト表示 */}
+      <ul className="list-card-list mobile-only">
+        {filtered.length === 0 ? (
+          <li className="empty" style={{ padding: 16 }}>
+            対象がありません
+          </li>
+        ) : (
+          filtered.map((t) => {
+            const urgency = getUrgencyLevel(t.days_until_inspection ?? null);
+            const checked = selected.has(t.customer_id);
+            return (
+              <li key={t.customer_id} className={`list-card ${urgency}`}>
+                <div className="list-card-row">
+                  <input
+                    type="checkbox"
+                    className="list-card-checkbox"
+                    checked={checked}
+                    onChange={() => toggle(t.customer_id)}
+                    aria-label={`${t.name}を選択`}
+                  />
+                  <div className="list-card-main">
+                    <Link href={`/customers/${t.customer_id}`} className="list-card-name">
+                      {t.name}
+                    </Link>
+                    <div className="list-card-meta">{t.phone ?? '電話番号未登録'}</div>
+                    <div className="list-card-vehicle">
+                      <span>
+                        {t.maker} {t.model}
+                      </span>
+                      {t.plate && <span className="plate">{t.plate}</span>}
+                    </div>
+                  </div>
+                  <div className="list-card-side">
+                    <div className={`list-card-days ${urgency}`}>
+                      {priorityLabel(t.days_until_inspection)}
+                    </div>
+                    <div className="list-card-days-sub">
+                      {formatDate(t.inspection_expire_date) || '満了日未設定'}
+                    </div>
+                  </div>
+                </div>
+                <div className="list-card-meta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span>推定走行 {formatKm(t.estimated_mileage)}</span>
+                  {rule === 'oil_4000km' && (
+                    <span>
+                      オイル目安 {formatKm(t.next_oil_target_km)}（超過 {formatKm(t.oil_overage_km)}）
+                    </span>
+                  )}
+                </div>
+                <div className="list-card-actions">
+                  <div className="list-card-badges">
+                    <Badge variant={t.line_user_id ? 'success' : 'neutral'}>LINE</Badge>
+                    <Badge variant={t.email ? 'success' : 'neutral'}>MAIL</Badge>
+                  </div>
+                  <button
+                    className="btn btn-sm list-card-cta"
+                    disabled={busy}
+                    onClick={() => send('one', t.customer_id)}
+                  >
+                    送信
+                  </button>
+                </div>
+              </li>
+            );
+          })
+        )}
+      </ul>
     </section>
   );
 }

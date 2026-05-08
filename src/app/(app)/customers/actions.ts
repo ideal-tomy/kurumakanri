@@ -67,14 +67,22 @@ export async function createCustomerAction(formData: FormData) {
     throw new Error(error?.message ?? '顧客の作成に失敗しました');
   }
 
-  const hasVehicle = formData.get('with_vehicle') === 'on';
-  if (hasVehicle) {
+  // 車両情報は「メーカー・車種・ナンバー・車検満了日」の4項目すべて埋まっているときだけ insert する。
+  // ウィザードの Step 1 だけで保存するケースを許容するため、いずれかが欠ければ車両は登録せず顧客のみ作る。
+  const hasVehicleFlag = formData.get('with_vehicle') === 'on';
+  const maker = nullable(formData.get('maker'));
+  const model = nullable(formData.get('model'));
+  const plate = nullable(formData.get('plate'));
+  const inspectionExpireDate = nullable(formData.get('inspection_expire_date'));
+  const allVehicleRequiredFilled = Boolean(maker && model && plate && inspectionExpireDate);
+
+  if (hasVehicleFlag && allVehicleRequiredFilled) {
     const v = vehicleSchema.parse({
-      maker: formData.get('maker') ?? '',
-      model: formData.get('model') ?? '',
-      plate: formData.get('plate') ?? '',
+      maker,
+      model,
+      plate,
       vin: nullable(formData.get('vin')),
-      inspection_expire_date: formData.get('inspection_expire_date') ?? '',
+      inspection_expire_date: inspectionExpireDate,
       initial_mileage: formData.get('initial_mileage') ?? 0,
       monthly_avg_km: nullable(formData.get('monthly_avg_km')),
       last_oil_change_mileage: nullable(formData.get('last_oil_change_mileage')),

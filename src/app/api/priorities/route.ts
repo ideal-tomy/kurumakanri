@@ -59,10 +59,33 @@ export async function GET(req: Request) {
       .filter((id): id is string => typeof id === 'string'),
   );
 
+  // 一覧表示時に LINE 送信可否（line_user_id 有無）を判定するため、
+  // queue 上に出ている customer_id を集めて customers テーブルから補足取得する。
+  const customerIds = Array.from(
+    new Set(
+      ((data ?? []) as PriorityQueueRow[])
+        .map((r) => r.customer_id)
+        .filter((id): id is string => typeof id === 'string'),
+    ),
+  );
+  const customerMeta = new Map<string, { line_user_id: string | null }>();
+  if (customerIds.length > 0) {
+    const { data: customerRows } = await supabase
+      .from('customers')
+      .select('id, line_user_id')
+      .in('id', customerIds);
+    for (const c of customerRows ?? []) {
+      customerMeta.set(c.id as string, { line_user_id: (c.line_user_id ?? null) as string | null });
+    }
+  }
+
   const rows: PriorityQueueRow[] = ((data ?? []) as PriorityQueueRow[])
     .map((row) => ({
-    ...row,
+      ...row,
       source_type: (row.source_type === 'MANUAL' ? 'MANUAL' : 'AUTO') as 'MANUAL' | 'AUTO',
+      line_user_id: row.customer_id
+        ? (customerMeta.get(row.customer_id)?.line_user_id ?? null)
+        : null,
     }))
     .filter(
       (row) =>

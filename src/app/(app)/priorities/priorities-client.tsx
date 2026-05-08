@@ -1,48 +1,29 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/badge';
+import { CustomerActionCard } from '@/components/customer-action-card';
 import type { PriorityQueueRow, TaskStatus, TaskType } from '@/lib/supabase/types';
 import {
   type PriorityFilterMode,
   type PrioritySortMode,
-  taskStatusLabel,
 } from '@/lib/priorities';
+import {
+  computeDaysFromSortDueAt,
+  pickRuleKeyFromQueueId,
+} from '@/lib/urgency';
 
 const FILTERS: Array<{ id: PriorityFilterMode; label: string }> = [
-  { id: 'weekly', label: '今週の送信候補' },
+  { id: 'weekly', label: '今週やること' },
   { id: 'all', label: 'すべて' },
-  { id: 'open', label: '未完了' },
-  { id: 'manual', label: '手動タスク' },
-  { id: 'auto', label: '自動候補' },
   { id: 'done', label: '完了' },
 ];
 
-function statusVariant(status: TaskStatus): 'success' | 'warn' | 'danger' | 'info' {
-  if (status === 'DONE') return 'success';
-  if (status === 'IN_PROGRESS') return 'warn';
-  if (status === 'CANCELLED') return 'danger';
-  return 'info';
-}
-
-function priorityVariant(priority: number): 'danger' | 'warn' | 'success' {
-  if (priority >= 5) return 'danger';
-  if (priority >= 3) return 'warn';
-  return 'success';
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function ruleLabelFromQueueId(queueId: string): string | null {
+  if (queueId.startsWith('AUTO:SHAKEN90:')) return '車検 90日前';
+  if (queueId.startsWith('AUTO:SHAKEN180:')) return '車検 180日前';
+  if (queueId.startsWith('AUTO:OIL:')) return 'オイル交換目安';
+  if (queueId.startsWith('MANUAL:')) return '手動タスク';
+  return null;
 }
 
 export function PrioritiesClient() {
@@ -51,6 +32,7 @@ export function PrioritiesClient() {
   const [filter, setFilter] = useState<PriorityFilterMode>('weekly');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [summary, setSummary] = useState({
     openCount: 0,
     weeklyAutoCount: 0,
@@ -59,6 +41,7 @@ export function PrioritiesClient() {
   });
   const [savingTask, setSavingTask] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Record<string, boolean>>({});
+  const [sendingIds, setSendingIds] = useState<Record<string, boolean>>({});
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -94,6 +77,13 @@ export function PrioritiesClient() {
     void fetchItems();
   }, [fetchItems]);
 
+  // 一定時間で message を消す
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [message]);
+
   async function createTask() {
     if (!newTask.title.trim()) return;
     setSavingTask(true);
@@ -120,85 +110,201 @@ export function PrioritiesClient() {
     await fetchItems();
   }
 
-  async function updateTaskStatus(taskId: string, status: TaskStatus) {
-    setUpdatingIds((prev) => ({ ...prev, [taskId]: true }));
-    const res = await fetch(`/api/priorities/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? 'タスク更新に失敗しました。');
-      setUpdatingIds((prev) => ({ ...prev, [taskId]: false }));
+  async function completeItem(item: PriorityQueueRow) {
+    setError(null);
+    if (item.task_id) {
+      // MANUAL タスク：staff_tasks の status を DONE に
+      setUpdatingIds((prev) => ({ ...prev, [item.queue_id]: true }));
+      const res = await fetch(`/api/priorities/tasks/${item.task_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DONE' as TaskStatus }),
+      });
+      const json = await res.json();
+      setUpdatingIds((prev) => ({ ...prev, [item.queue_id]: false }));
+      if (!res.ok) {
+        setError(json.error ?? 'タスク更新に失敗しました。');
+        return;
+      }
+      setMessage('対応済みにしました');
+      await fetchItems();
       return;
     }
-    setUpdatingIds((prev) => ({ ...prev, [taskId]: false }));
+
+    // AUTO 候補：customer_id を resolved 扱いにする
+    if (!item.customer_id) {
+      setError('完了登録に必要な顧客IDが不足しています。');
+      return;
+    }
+    setUpdatingIds((prev) => ({ ...prev, [item.queue_id]: true }));
+    const res = await fetch('/api/priorities/resolved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_id: item.customer_id,
+        source_label: ruleLabelFromQueueId(item.queue_id) ?? '今週の連絡',
+      }),
+    });
+    const json = await res.json();
+    setUpdatingIds((prev) => ({ ...prev, [item.queue_id]: false }));
+    if (!res.ok) {
+      setError(json.error ?? '完了登録に失敗しました。');
+      return;
+    }
+    setMessage('対応済みにしました');
     await fetchItems();
   }
 
-  const openCount = useMemo(
-    () => items.filter((item) => item.status === 'OPEN' || item.status === 'IN_PROGRESS').length,
+  async function sendLine(item: PriorityQueueRow) {
+    setError(null);
+    if (!item.customer_id) {
+      setError('LINE送信先の顧客IDが不足しています。');
+      return;
+    }
+    const ruleKey = pickRuleKeyFromQueueId(item.queue_id);
+    if (!ruleKey) {
+      setError('このタスクは LINE 送信対象ではありません（手動タスクや該当通知タイミング外）。');
+      return;
+    }
+    if (!item.line_user_id) {
+      setError('LINE未連携の顧客です。先に LINE userId を結びつけてください。');
+      return;
+    }
+    if (typeof window !== 'undefined' && !window.confirm(`${item.customer_name ?? ''}様にLINEで通知しますか？`)) {
+      return;
+    }
+    setSendingIds((prev) => ({ ...prev, [item.queue_id]: true }));
+    const res = await fetch('/api/notifications/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rule: ruleKey,
+        channel: 'LINE',
+        customer_ids: [item.customer_id],
+      }),
+    });
+    const json = await res.json();
+    setSendingIds((prev) => ({ ...prev, [item.queue_id]: false }));
+    if (!res.ok) {
+      setError(json.error ?? 'LINE送信に失敗しました。');
+      return;
+    }
+    if ((json.failed ?? 0) > 0) {
+      const codes = json.failedByCode ? Object.keys(json.failedByCode).join(', ') : '';
+      setError(`LINE送信が一部失敗しました${codes ? `（${codes}）` : ''}。`);
+    } else {
+      setMessage('LINEを送信しました');
+    }
+    await fetchItems();
+  }
+
+  const openItems = useMemo(
+    () => items.filter((item) => item.status === 'OPEN' || item.status === 'IN_PROGRESS'),
     [items],
   );
+  const urgencyBannerCount = openItems.length;
   const opsManagerContact = process.env.NEXT_PUBLIC_OPS_MANAGER_CONTACT ?? '管理者';
 
   return (
     <>
+      {/* 緊急度サマリーバナー */}
+      <div className={`urgency-banner ${urgencyBannerCount === 0 ? 'calm' : urgencyBannerCount > 5 ? '' : 'warn'}`}>
+        <div>
+          <div className="urgency-banner-label">今週連絡が必要</div>
+          <div>
+            <span className="urgency-banner-value">{urgencyBannerCount}</span>
+            <span style={{ marginLeft: 4, fontSize: 14 }}>件</span>
+          </div>
+          {urgencyBannerCount === 0 && (
+            <div className="urgency-banner-sub">今週の連絡対象はありません</div>
+          )}
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 12 }}>
+          {summary.failedThisWeek > 0 && (
+            <div>今週の送信失敗: {summary.failedThisWeek}件</div>
+          )}
+          <div>障害時連絡先: {opsManagerContact}</div>
+        </div>
+      </div>
+
+      {/* メッセージ・エラー表示 */}
+      {message && (
+        <div className="badge badge-success" style={{ display: 'block', padding: 10, marginBottom: 12 }}>
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="badge badge-danger" style={{ display: 'block', padding: 10, marginBottom: 12, whiteSpace: 'pre-line' }}>
+          {error}
+        </div>
+      )}
+
+      {/* フィルタ・並び替え */}
       <div className="page-actions" style={{ marginBottom: 16 }}>
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            className={`btn ${filter === f.id ? 'btn-primary' : ''}`}
+            onClick={() => setFilter(f.id)}
+            type="button"
+          >
+            {f.label}
+          </button>
+        ))}
         <select
-          className="input"
-          style={{ width: 220 }}
+          className="select"
+          style={{ width: 180 }}
           value={sort}
           onChange={(e) => setSort(e.target.value as PrioritySortMode)}
         >
           <option value="priority">並び順: 優先度</option>
           <option value="timeline">並び順: 時系列</option>
         </select>
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            className={`btn ${filter === f.id ? 'btn-primary' : ''}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="kpi">
-          <div className="kpi-label">今週送信候補</div>
-          <div>
-            <span className="kpi-value">{summary.weeklyAutoCount}</span>
-            <span className="kpi-unit">件</span>
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">未完了タスク</div>
-          <div>
-            <span className="kpi-value">{summary.openCount || openCount}</span>
-            <span className="kpi-unit">件</span>
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">今週失敗件数</div>
-          <div>
-            <span className="kpi-value">{summary.failedThisWeek}</span>
-            <span className="kpi-unit">件</span>
-          </div>
-        </div>
-      </div>
+      {/* カードリスト */}
+      <section className="panel" style={{ padding: 16 }}>
+        {loading ? (
+          <div className="empty">読み込み中...</div>
+        ) : items.length === 0 ? (
+          <div className="empty">表示できるタスクがありません</div>
+        ) : (
+          <ul className="action-card-list">
+            {items.map((item) => {
+              const daysLeft = computeDaysFromSortDueAt(item.sort_due_at);
+              const ruleAvailable = pickRuleKeyFromQueueId(item.queue_id) !== null;
+              const showCompleteButton =
+                (item.task_id != null && item.status !== 'DONE') ||
+                (item.source_type === 'AUTO' && item.customer_id != null && item.status !== 'DONE');
+              return (
+                <CustomerActionCard
+                  key={item.queue_id}
+                  customerId={item.customer_id}
+                  customerName={item.customer_name}
+                  phone={item.phone}
+                  hasLine={Boolean(item.line_user_id)}
+                  vehicleLabel={item.vehicle_label ?? null}
+                  plate={item.plate}
+                  daysLeft={daysLeft}
+                  ruleLabel={ruleLabelFromQueueId(item.queue_id)}
+                  taskId={item.task_id}
+                  showCompleteButton={showCompleteButton}
+                  ruleAvailable={ruleAvailable}
+                  onLineSend={() => void sendLine(item)}
+                  onComplete={() => void completeItem(item)}
+                  lineSending={Boolean(sendingIds[item.queue_id])}
+                  completing={Boolean(updatingIds[item.queue_id])}
+                />
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-      <div className="badge badge-info" style={{ display: 'block', marginBottom: 16 }}>
-        対応済み（今週完了）にした顧客の自動候補は一覧から除外されます。除外顧客数: {summary.resolvedCustomerCount}件。障害時の連絡先: {opsManagerContact}
-      </div>
-
-      <section className="panel" style={{ padding: 16, marginBottom: 20 }}>
-        <div className="panel-header" style={{ marginBottom: 12 }}>
-          <div className="panel-title">手動タスクを追加</div>
-        </div>
-        <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8 }}>
+      {/* 手動タスク追加（折りたたみ） */}
+      <details className="panel" style={{ marginTop: 20, padding: 16 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>+ 手動タスクを追加（電話・見積など）</summary>
+        <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8, marginTop: 12 }}>
           <input
             className="input"
             placeholder="例: 田中様へ車検見積の再連絡"
@@ -206,14 +312,14 @@ export function PrioritiesClient() {
             onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
           />
           <select
-            className="input"
+            className="select"
             value={newTask.taskType}
             onChange={(e) => setNewTask((prev) => ({ ...prev, taskType: e.target.value as TaskType }))}
           >
-            <option value="CALL">CALL</option>
-            <option value="FOLLOWUP">FOLLOWUP</option>
-            <option value="QUOTE">QUOTE</option>
-            <option value="OTHER">OTHER</option>
+            <option value="CALL">電話</option>
+            <option value="FOLLOWUP">フォロー</option>
+            <option value="QUOTE">見積</option>
+            <option value="OTHER">その他</option>
           </select>
           <input
             className="input"
@@ -224,6 +330,7 @@ export function PrioritiesClient() {
             onChange={(e) =>
               setNewTask((prev) => ({ ...prev, priority: Number(e.target.value || 3) }))
             }
+            aria-label="優先度（1〜5）"
           />
           <input
             className="input"
@@ -242,111 +349,16 @@ export function PrioritiesClient() {
           />
         </div>
         <div style={{ marginTop: 8 }}>
-          <button className="btn btn-primary" disabled={savingTask} onClick={createTask}>
+          <button
+            className="btn btn-primary"
+            disabled={savingTask}
+            onClick={createTask}
+            type="button"
+          >
             {savingTask ? '追加中...' : 'タスク追加'}
           </button>
         </div>
-      </section>
-
-      <section className="panel">
-        <header className="panel-header">
-          <div className="panel-title">優先ワークキュー</div>
-        </header>
-        {error && (
-          <div className="badge badge-danger" style={{ margin: 12, display: 'block' }}>
-            {error}
-          </div>
-        )}
-        {loading ? (
-          <div className="empty" style={{ padding: 16 }}>読み込み中...</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>種別</th>
-                  <th>タイトル</th>
-                  <th>顧客</th>
-                  <th>期限/予定</th>
-                  <th>優先</th>
-                  <th>状態</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className="empty">表示できるタスクがありません</div>
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((item) => (
-                    <tr key={item.queue_id}>
-                      <td>
-                        <Badge variant={item.source_type === 'AUTO' ? 'info' : 'success'}>
-                          {item.source_type}
-                        </Badge>
-                      </td>
-                      <td>
-                        <div className="cust-name">{item.title}</div>
-                        {item.description && <div className="cust-meta">{item.description}</div>}
-                      </td>
-                      <td>
-                        {item.customer_id ? (
-                          <Link href={`/customers/${item.customer_id}`} className="panel-link">
-                            {item.customer_name ?? '-'}
-                          </Link>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                      <td>{formatDateTime(item.sort_due_at)}</td>
-                      <td>
-                        <Badge variant={priorityVariant(item.priority)}>
-                          P{item.priority}
-                        </Badge>
-                      </td>
-                      <td>
-                        <Badge variant={statusVariant(item.status)}>
-                          {taskStatusLabel(item.status)}
-                        </Badge>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {item.phone && (
-                            <a className="btn btn-sm" href={`tel:${item.phone}`}>
-                              電話
-                            </a>
-                          )}
-                          {item.task_id && item.status !== 'DONE' && (
-                            <button
-                              className="btn btn-sm"
-                              disabled={!!updatingIds[item.task_id]}
-                              onClick={() => updateTaskStatus(item.task_id as string, 'DONE')}
-                            >
-                              完了
-                            </button>
-                          )}
-                          {item.task_id && item.status === 'OPEN' && (
-                            <button
-                              className="btn btn-sm"
-                              disabled={!!updatingIds[item.task_id]}
-                              onClick={() => updateTaskStatus(item.task_id as string, 'IN_PROGRESS')}
-                            >
-                              着手
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      </details>
     </>
   );
 }

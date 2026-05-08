@@ -1,4 +1,5 @@
 import { TopNav } from '@/components/top-nav';
+import { TopTabs } from '@/components/top-tabs';
 import { Sidebar } from '@/components/sidebar';
 import { requireStaff } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
@@ -33,6 +34,7 @@ export default async function AppLayout({
   return (
     <>
       <TopNav userName={ctx.profile?.name ?? ctx.email} role={ctx.profile?.role} />
+      <TopTabs counts={counts} />
       <div className="app-shell">
         <Sidebar counts={counts} />
         <main className="main">{children}</main>

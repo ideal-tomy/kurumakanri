@@ -3,6 +3,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge, priorityVariant } from '@/components/badge';
 import { formatDate, formatKm, priorityLabel } from '@/lib/format';
 import type { CustomerOverviewRow } from '@/lib/supabase/types';
+import { getUrgencyLevel } from '@/lib/urgency';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,8 @@ export default async function CustomersPage({
           </button>
         </form>
 
-        <div className="table-wrap">
+        {/* PC: テーブル表示 */}
+        <div className="table-wrap desktop-only">
           <table>
             <thead>
               <tr>
@@ -151,6 +153,70 @@ export default async function CustomersPage({
             </tbody>
           </table>
         </div>
+
+        {/* モバイル: カードリスト表示 */}
+        <ul className="list-card-list mobile-only">
+          {customers.length === 0 ? (
+            <li className="empty" style={{ padding: 16 }}>
+              該当する顧客がありません
+            </li>
+          ) : (
+            customers.map((row) => {
+              const urgency = getUrgencyLevel(row.days_until_inspection ?? null);
+              return (
+                <li
+                  key={`${row.customer_id}-${row.vehicle_id ?? 'none'}`}
+                  className={`list-card ${urgency}`}
+                >
+                  <div className="list-card-row">
+                    <div className="list-card-main">
+                      <Link href={`/customers/${row.customer_id}`} className="list-card-name">
+                        {row.name}
+                      </Link>
+                      <div className="list-card-meta">{row.phone ?? '電話番号未登録'}</div>
+                      {row.vehicle_id ? (
+                        <div className="list-card-vehicle">
+                          <span>
+                            {row.maker} {row.model}
+                          </span>
+                          {row.plate && <span className="plate">{row.plate}</span>}
+                        </div>
+                      ) : (
+                        <div className="list-card-meta">車両未登録</div>
+                      )}
+                    </div>
+                    <div className="list-card-side">
+                      <div className={`list-card-days ${urgency}`}>
+                        {priorityLabel(row.days_until_inspection)}
+                      </div>
+                      <div className="list-card-days-sub">
+                        {formatDate(row.inspection_expire_date) || '満了日未設定'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="list-card-actions">
+                    <Badge variant={priorityVariant(row.days_until_inspection)}>
+                      {priorityVariant(row.days_until_inspection) === 'danger'
+                        ? '緊急'
+                        : priorityVariant(row.days_until_inspection) === 'warn'
+                          ? '近接'
+                          : '余裕'}
+                    </Badge>
+                    <span className="list-card-meta">
+                      推定走行 {formatKm(row.estimated_mileage)}
+                    </span>
+                    <Link
+                      className="btn btn-sm list-card-cta"
+                      href={`/customers/${row.customer_id}`}
+                    >
+                      詳細
+                    </Link>
+                  </div>
+                </li>
+              );
+            })
+          )}
+        </ul>
       </section>
     </>
   );
