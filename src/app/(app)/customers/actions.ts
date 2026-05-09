@@ -42,6 +42,28 @@ function nullable(value: FormDataEntryValue | null): string | null {
   return v === '' ? null : v;
 }
 
+function parseVehicleSpecsFromForm(formData: FormData): Record<string, unknown> {
+  const cls = nullable(formData.get('vehicle_class'));
+  const vehicle_class = cls === 'LIGHT' || cls === 'STANDARD' ? cls : undefined;
+  const eco = formData.get('eco_reduction_eligible') === 'on';
+  const dispRaw = nullable(formData.get('displacement_cc'));
+  const wRaw = nullable(formData.get('gross_weight_kg'));
+  const displacement_cc =
+    dispRaw != null ? Number.parseInt(dispRaw, 10) : Number.NaN;
+  const gross_weight_kg =
+    wRaw != null ? Number.parseInt(wRaw, 10) : Number.NaN;
+  const specs: Record<string, unknown> = {};
+  if (vehicle_class) specs.vehicle_class = vehicle_class;
+  if (eco) specs.eco_reduction_eligible = true;
+  if (Number.isFinite(displacement_cc) && displacement_cc > 0) {
+    specs.displacement_cc = displacement_cc;
+  }
+  if (Number.isFinite(gross_weight_kg) && gross_weight_kg > 0) {
+    specs.gross_weight_kg = gross_weight_kg;
+  }
+  return specs;
+}
+
 export async function createCustomerAction(formData: FormData) {
   const ctx = await requireStaff();
   const supabase = getServerSupabase();
@@ -92,6 +114,7 @@ export async function createCustomerAction(formData: FormData) {
     await supabase.from('vehicles').insert({
       ...v,
       customer_id: customer.id,
+      vehicle_specs: parseVehicleSpecsFromForm(formData),
     });
   }
 
@@ -160,8 +183,10 @@ export async function upsertVehicleAction(customerId: string, vehicleId: string 
     oil_interval_km: formData.get('oil_interval_km') ?? 4000,
   });
 
+  const vehicle_specs = parseVehicleSpecsFromForm(formData);
+
   if (vehicleId) {
-    const { error } = await supabase.from('vehicles').update(data).eq('id', vehicleId);
+    const { error } = await supabase.from('vehicles').update({ ...data, vehicle_specs }).eq('id', vehicleId);
     if (error) throw new Error(error.message);
     await writeAudit({
       userId: ctx.userId,
@@ -171,7 +196,11 @@ export async function upsertVehicleAction(customerId: string, vehicleId: string 
       payload: data,
     });
   } else {
-    const { error } = await supabase.from('vehicles').insert({ ...data, customer_id: customerId });
+    const { error } = await supabase.from('vehicles').insert({
+      ...data,
+      customer_id: customerId,
+      vehicle_specs,
+    });
     if (error) throw new Error(error.message);
     await writeAudit({
       userId: ctx.userId,

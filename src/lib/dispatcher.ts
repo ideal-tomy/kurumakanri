@@ -5,6 +5,7 @@ import { sendMail } from './providers/mail';
 import { buildOptOutToken } from './optout';
 import { computeEstimatedMileage, daysUntil, nextOilTargetKm } from './mileage';
 import { buildIdempotencyKey } from './idempotency';
+import { buildQuoteShareToken, isQuoteShareConfigured } from './quote-share';
 import type {
   CustomerOverviewRow,
   NotificationChannel,
@@ -61,6 +62,29 @@ export async function buildMessageVariables(
   );
   const days = overview.days_until_inspection ?? daysUntil(overview.inspection_expire_date) ?? 0;
 
+  let quoteUrl = `${siteUrl}/me?cid=${overview.customer_id}`;
+  if (isQuoteShareConfigured()) {
+    try {
+      const srv = getServiceSupabase();
+      const { data: vrows } = await srv.from('vehicles').select('id').eq('customer_id', overview.customer_id);
+      const vid = (vrows ?? []).map((r: { id: string }) => r.id);
+      if (vid.length) {
+        const { data: qr } = await srv
+          .from('quotes')
+          .select('id')
+          .in('vehicle_id', vid)
+          .order('issued_at', { ascending: false })
+          .limit(1)
+          .maybeSingle<{ id: string }>();
+        if (qr?.id) {
+          quoteUrl = `${siteUrl}/q/${buildQuoteShareToken(qr.id)}`;
+        }
+      }
+    } catch (e) {
+      console.warn('[dispatcher] quote share url failed', e);
+    }
+  }
+
   return {
     name: overview.name,
     carName: `${overview.maker ?? ''} ${overview.model ?? ''}`.trim() || 'お車',
@@ -69,7 +93,7 @@ export async function buildMessageVariables(
     daysLeft: String(days),
     mileage: estimated.toLocaleString('ja-JP'),
     nextOilTargetKm: oilTarget.toLocaleString('ja-JP'),
-    quoteUrl: `${siteUrl}/me?cid=${overview.customer_id}`,
+    quoteUrl,
     bookingUrl: `${siteUrl}/me?cid=${overview.customer_id}#booking`,
     unsubscribeUrl: `${siteUrl}/u/${optoutToken}`,
   };

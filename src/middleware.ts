@@ -12,7 +12,7 @@ const PROTECTED_PREFIXES = [
   '/line',
 ];
 
-const PUBLIC_PREFIXES = ['/login', '/u/', '/me', '/api/webhooks', '/api/public'];
+const PUBLIC_PREFIXES = ['/login', '/u/', '/me', '/q/', '/api/webhooks', '/api/public'];
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: { headers: req.headers } });

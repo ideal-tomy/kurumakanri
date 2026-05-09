@@ -269,6 +269,26 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   );
 }
 
+function vehicleSpecsDefaults(vehicle: VehicleRow | null): {
+  vehicle_class: string;
+  eco: boolean;
+  displacement: string;
+  grossWeight: string;
+} {
+  const raw =
+    vehicle?.vehicle_specs && typeof vehicle.vehicle_specs === 'object' && !Array.isArray(vehicle.vehicle_specs)
+      ? (vehicle.vehicle_specs as Record<string, unknown>)
+      : {};
+  const vcRaw = raw.vehicle_class;
+  const vehicle_class = vcRaw === 'LIGHT' || vcRaw === 'STANDARD' ? vcRaw : 'STANDARD';
+  const eco = raw.eco_reduction_eligible === true;
+  const displacement =
+    typeof raw.displacement_cc === 'number' ? String(raw.displacement_cc) : '';
+  const grossWeight =
+    typeof raw.gross_weight_kg === 'number' ? String(raw.gross_weight_kg) : '';
+  return { vehicle_class, eco, displacement, grossWeight };
+}
+
 function VehicleForm({
   customerId,
   vehicle,
@@ -280,6 +300,7 @@ function VehicleForm({
   estimated?: number | null;
   daysLeft?: number | null;
 }) {
+  const sp = vehicleSpecsDefaults(vehicle);
   const action = upsertVehicleAction.bind(null, customerId, vehicle?.id ?? null);
   return (
     <form action={action} className="form-grid" style={{ borderTop: vehicle ? '1px solid var(--border)' : 'none', paddingTop: vehicle ? 16 : 0 }}>
@@ -299,6 +320,27 @@ function VehicleForm({
         <div className="form-field">
           <label className="form-label">VIN</label>
           <input className="input" name="vin" defaultValue={vehicle?.vin ?? ''} />
+        </div>
+        <div className="form-field">
+          <label className="form-label">自動車区分（車検証・概算）</label>
+          <select className="input select" name="vehicle_class" defaultValue={sp.vehicle_class}>
+            <option value="STANDARD">普通自動車など</option>
+            <option value="LIGHT">軽自動車</option>
+          </select>
+        </div>
+        <div className="form-field" style={{ alignSelf: 'end' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" name="eco_reduction_eligible" defaultChecked={sp.eco} />
+            <span>エコカー減税の適用（重量税の概算）</span>
+          </label>
+        </div>
+        <div className="form-field">
+          <label className="form-label">総排気量 (cc・任意)</label>
+          <input className="input" type="number" name="displacement_cc" min={1} placeholder="例 1500" defaultValue={sp.displacement || ''} />
+        </div>
+        <div className="form-field">
+          <label className="form-label">車両重量 (kg・任意)</label>
+          <input className="input" type="number" name="gross_weight_kg" min={1} placeholder="例 1200" defaultValue={sp.grossWeight || ''} />
         </div>
         <div className="form-field">
           <label className="form-label">車検満了日</label>

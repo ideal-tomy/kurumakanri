@@ -60,8 +60,24 @@ export interface VehicleRow {
   last_oil_change_mileage: number | null;
   last_oil_change_at: string | null;
   oil_interval_km: number;
+  /** 車検証・区分入力（JSON）。vehicle_class / eco_reduction_eligible / displacement_cc / gross_weight_kg 等 */
+  vehicle_specs: Json;
   created_at: string;
   updated_at: string;
+}
+
+export interface StatutoryFeeRateRow {
+  id: string;
+  effective_from: string;
+  vehicle_class: 'LIGHT' | 'STANDARD';
+  jibaiseki_24mo_yen: number;
+  weight_tax_yen_standard: number;
+  weight_tax_yen_eco: number;
+  prepaid_inspection_yen: number;
+  lane_stamp_yen: number;
+  document_fee_yen: number;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface CustomerOverviewRow {
@@ -166,12 +182,21 @@ export interface QuoteRow {
   vehicle_id: string;
   quote_no: string | null;
   status: QuoteStatus;
+  /** 課税10%込の作業側合計と非課税法定の合計（＝grand_total と一致させる） */
   total_amount: number;
   legal_items: Json;
   service_items: Json;
   notes: string | null;
   valid_until: string | null;
   issued_at: string | null;
+  /** 10%対象・税抜小計（円） */
+  taxable_subtotal_ex_tax?: number | null;
+  /** 消費税10%相当（円） */
+  tax_amount_10?: number | null;
+  /** 非課税・法定側小計（円） */
+  non_taxable_subtotal?: number | null;
+  /** 総合計（円）。通常 total_amount と同一 */
+  grand_total?: number | null;
   created_at: string;
   updated_at: string;
 }

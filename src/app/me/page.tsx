@@ -1,12 +1,7 @@
 import { getServiceSupabase } from '@/lib/supabase/server';
 import { computeEstimatedMileage, daysUntil } from '@/lib/mileage';
-import { formatDate, formatKm, formatYen, priorityLabel } from '@/lib/format';
-import type {
-  CustomerOverviewRow,
-  QuoteRow,
-  ServiceHistoryRow,
-} from '@/lib/supabase/types';
-import type { QuoteLineItem } from '@/lib/quote';
+import { formatDate, formatKm, priorityLabel } from '@/lib/format';
+import type { CustomerOverviewRow, ServiceHistoryRow } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,18 +20,8 @@ async function loadCustomer(customerId: string) {
   const vehiclesRes = await supabase.from('vehicles').select('id').eq('customer_id', customerId);
   const vehicleIds = (vehiclesRes.data ?? []).map((v) => v.id);
 
-  let quote: QuoteRow | null = null;
   let histories: ServiceHistoryRow[] = [];
   if (vehicleIds.length > 0) {
-    const quoteRes = await supabase
-      .from('quotes')
-      .select('*')
-      .in('vehicle_id', vehicleIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle<QuoteRow>();
-    quote = quoteRes.data ?? null;
-
     const historyRes = await supabase
       .from('service_histories')
       .select('*')
@@ -48,7 +33,6 @@ async function loadCustomer(customerId: string) {
 
   return {
     overview: overviewRes.data,
-    quote,
     histories,
   };
 }
@@ -65,7 +49,7 @@ export default async function CustomerSelfView({ searchParams }: PageProps) {
     );
   }
 
-  const { overview, quote, histories } = await loadCustomer(searchParams.cid);
+  const { overview, histories } = await loadCustomer(searchParams.cid);
   if (!overview) {
     return (
       <div className="customer-view" style={{ padding: 32 }}>
@@ -82,8 +66,6 @@ export default async function CustomerSelfView({ searchParams }: PageProps) {
       overview.monthly_avg_km,
     );
   const days = overview.days_until_inspection ?? daysUntil(overview.inspection_expire_date);
-  const legal = (quote?.legal_items ?? []) as unknown as QuoteLineItem[];
-  const service = (quote?.service_items ?? []) as unknown as QuoteLineItem[];
 
   return (
     <div className="customer-view">
@@ -115,21 +97,27 @@ export default async function CustomerSelfView({ searchParams }: PageProps) {
                 </div>
                 <div>
                   <div className="car-stat-label">残り</div>
-                  <div className="car-stat-value">
-                    {priorityLabel(days)}
-                  </div>
+                  <div className="car-stat-value">{priorityLabel(days)}</div>
                 </div>
                 <div>
                   <div className="car-stat-label">推定走行距離</div>
-                  <div className="car-stat-value">
-                    {formatKm(estimated)}
-                  </div>
+                  <div className="car-stat-value">{formatKm(estimated)}</div>
                 </div>
                 <div>
                   <div className="car-stat-label">前回オイル交換</div>
                   <div className="car-stat-value">{formatDate(overview.last_oil_change_at)}</div>
                 </div>
               </div>
+            </div>
+
+            <div className="quote-card" style={{ borderStyle: 'dashed' }}>
+              <div className="quote-header">
+                <div className="quote-title">お見積</div>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                金額のご案内はセキュリティのため、お送りしている専用の見積ページ（LINE
+                またはメールのリンク）からご確認ください。この画面ではお車の状態・整備履歴のみ表示しています。
+              </p>
             </div>
 
             {days != null && days <= 90 && (
@@ -139,34 +127,6 @@ export default async function CustomerSelfView({ searchParams }: PageProps) {
                 <div className="alert-desc">
                   満了日まで {priorityLabel(days)}。お早めの予約をご検討ください。
                 </div>
-              </div>
-            )}
-
-            {quote && (
-              <div className="quote-card">
-                <div className="quote-header">
-                  <div className="quote-title">お見積</div>
-                  <div className="quote-id">{quote.quote_no}</div>
-                </div>
-                <div className="quote-section-label">法定費用</div>
-                {legal.map((i, idx) => (
-                  <div className="quote-row" key={idx}>
-                    <span className="quote-row-label">{i.label}</span>
-                    <span className="quote-row-value">{formatYen(i.amount)}</span>
-                  </div>
-                ))}
-                <div className="quote-section-label" style={{ marginTop: 12 }}>整備項目</div>
-                {service.map((i, idx) => (
-                  <div className="quote-row" key={idx}>
-                    <span className="quote-row-label">{i.label}</span>
-                    <span className="quote-row-value">{formatYen(i.amount)}</span>
-                  </div>
-                ))}
-                <div className="quote-total">
-                  <span className="quote-total-label">TOTAL</span>
-                  <span className="quote-total-value">{formatYen(quote.total_amount)}</span>
-                </div>
-                {quote.notes && <div className="quote-notes" style={{ whiteSpace: 'pre-wrap' }}>{quote.notes}</div>}
               </div>
             )}
 

@@ -1075,6 +1075,98 @@ tbody tr.row-clickable:hover { background: var(--surface-2); }
   margin-bottom: 12px;
 }
 
+/* ============ QUOTE DOCUMENT（/q/token 公開見積） ============ */
+.quote-doc-shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 32px 56px;
+  background: var(--surface);
+}
+.quote-doc-head { text-align: center; margin-bottom: 28px; }
+.quote-doc-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.quote-doc-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.quote-doc-meta-left { flex: 1; min-width: 240px; }
+.quote-doc-meta-right {
+  flex: 0 1 280px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  text-align: right;
+}
+.quote-doc-to { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.quote-doc-sub { font-size: 13px; margin-bottom: 4px; }
+.quote-doc-car { font-size: 13px; color: var(--ink-2); margin-bottom: 16px; }
+.quote-doc-highlight {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.quote-doc-highlight span { letter-spacing: 0.06em; }
+.quote-doc-co { font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+.quote-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.quote-doc-table th,
+.quote-doc-table td {
+  border: 1px solid var(--border-strong);
+  padding: 8px 10px;
+}
+.quote-doc-table th {
+  background: var(--surface-2);
+  text-align: left;
+  font-weight: 600;
+}
+.quote-doc-table th.num,
+.quote-doc-table td.num { text-align: right; }
+.quote-doc-cat-row td {
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.quote-doc-sumgrid { display: flex; justify-content: flex-end; }
+.quote-doc-sum {
+  width: 100%;
+  max-width: 320px;
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  padding: 12px 16px;
+}
+.quote-doc-sum .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.quote-doc-sum .row.strong {
+  font-weight: 700;
+  font-size: 15px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.quote-doc-sum .row.small { font-size: 12px; color: var(--ink-2); }
+.quote-doc-footer { margin-top: 32px; font-size: 12px; color: var(--ink-2); }
+
+@media print {
+  body { background: #fff !important; }
+  .quote-doc-screen-only,
+  .no-print { display: none !important; }
+  .quote-doc-shell { max-width: none; padding: 12mm; margin: 0; }
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 1100px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }

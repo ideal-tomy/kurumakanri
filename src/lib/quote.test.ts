@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutoQuote, LEGAL_ITEMS_DEFAULT, SERVICE_ITEMS_DEFAULT } from './quote';
+import { buildAutoQuote } from './quote';
 
 describe('buildAutoQuote', () => {
-  it('sums legal and service items by default', () => {
+  it('sums legal and taxable service parts into grand_total', () => {
     const r = buildAutoQuote({});
-    const expected =
-      LEGAL_ITEMS_DEFAULT.reduce((s, i) => s + i.amount, 0) +
-      SERVICE_ITEMS_DEFAULT.reduce((s, i) => s + i.amount, 0);
-    expect(r.total_amount).toBe(expected);
+    expect(r.total_amount).toBe(r.grand_total);
+    expect(r.grand_total).toBe(r.non_taxable_subtotal + r.taxable_tax_included);
+    expect(r.tax_amount_10).toBe(r.taxable_tax_included - r.taxable_subtotal_ex_tax);
     expect(r.notes).toContain('実車確認後');
   });
 
