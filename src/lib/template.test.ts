@@ -21,4 +21,8 @@ describe('renderTemplate', () => {
   it('handles repeated and dotted keys', () => {
     expect(renderTemplate('{{a}} {{a}} {{b.c}}', { a: 'x', 'b.c': 'y' })).toBe('x x y');
   });
+
+  it('turns literal backslash-n into newline', () => {
+    expect(renderTemplate('a\\nb', {})).toBe('a\nb');
+  });
 });

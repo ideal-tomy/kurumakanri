@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { buildNotificationsReviewHref } from '@/lib/notifications/send-review-session';
 import { Badge, priorityVariant } from '@/components/badge';
 import { useToast } from '@/components/toast';
-import { formatDate, formatKm, priorityLabel } from '@/lib/format';
+import { formatDate, formatKm, formatYen, priorityLabel } from '@/lib/format';
 import type { RuleKey, RuleTarget } from '@/lib/rules';
 import { getUrgencyLevel } from '@/lib/urgency';
 
@@ -121,7 +122,23 @@ export function TargetList({
         >
           {allChecked ? '選択解除' : '全選択'}
         </button>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn"
+            disabled={selected.size === 0}
+            onClick={() => {
+              router.push(
+                buildNotificationsReviewHref({
+                  customerIds: Array.from(selected),
+                  rule,
+                  channel,
+                }),
+              );
+            }}
+          >
+            プレビューして送信
+          </button>
           <button
             className="btn btn-primary"
             disabled={busy || selected.size === 0}
@@ -144,6 +161,7 @@ export function TargetList({
               <th>車両</th>
               <th>満了日 / 残日数</th>
               <th>推定走行</th>
+              <th>見積</th>
               {rule === 'oil_4000km' && <th>オイル目安</th>}
               <th>連絡可</th>
               <th></th>
@@ -152,7 +170,7 @@ export function TargetList({
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={rule === 'oil_4000km' ? 8 : 7}>
+                <td colSpan={rule === 'oil_4000km' ? 9 : 8}>
                   <div className="empty">対象がありません</div>
                 </td>
               </tr>
@@ -193,6 +211,17 @@ export function TargetList({
                     </div>
                   </td>
                   <td>{formatKm(t.estimated_mileage)}</td>
+                  <td>
+                    {!t.vehicle_id ? (
+                      <span className="cust-meta">車両なし</span>
+                    ) : t.latest_quote_total_amount != null ? (
+                      <span>{formatYen(t.latest_quote_total_amount)}</span>
+                    ) : (
+                      <span className="cust-meta" style={{ color: 'var(--warn)' }}>
+                        未作成
+                      </span>
+                    )}
+                  </td>
                   {rule === 'oil_4000km' && (
                     <td>
                       <div>{formatKm(t.next_oil_target_km)}</div>
@@ -210,9 +239,25 @@ export function TargetList({
                       </Badge>
                     </div>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() =>
+                        router.push(
+                          buildNotificationsReviewHref({
+                            customerIds: [t.customer_id],
+                            rule,
+                            channel,
+                          }),
+                        )
+                      }
+                    >
+                      プレビュー
+                    </button>
                     <button
                       className="btn btn-sm"
+                      style={{ marginLeft: 6 }}
                       disabled={busy}
                       onClick={() => send('one', t.customer_id)}
                     >
@@ -269,6 +314,13 @@ export function TargetList({
                 </div>
                 <div className="list-card-meta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <span>推定走行 {formatKm(t.estimated_mileage)}</span>
+                  {!t.vehicle_id ? (
+                    <span>見積: 車両なし</span>
+                  ) : t.latest_quote_total_amount != null ? (
+                    <span>見積 {formatYen(t.latest_quote_total_amount)}</span>
+                  ) : (
+                    <span style={{ color: 'var(--warn)' }}>見積未作成</span>
+                  )}
                   {rule === 'oil_4000km' && (
                     <span>
                       オイル目安 {formatKm(t.next_oil_target_km)}（超過 {formatKm(t.oil_overage_km)}）
@@ -280,6 +332,21 @@ export function TargetList({
                     <Badge variant={t.line_user_id ? 'success' : 'neutral'}>LINE</Badge>
                     <Badge variant={t.email ? 'success' : 'neutral'}>MAIL</Badge>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() =>
+                      router.push(
+                        buildNotificationsReviewHref({
+                          customerIds: [t.customer_id],
+                          rule,
+                          channel,
+                        }),
+                      )
+                    }
+                  >
+                    プレビュー
+                  </button>
                   <button
                     className="btn btn-sm list-card-cta"
                     disabled={busy}

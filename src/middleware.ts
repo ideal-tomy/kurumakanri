@@ -7,6 +7,7 @@ const PROTECTED_PREFIXES = [
   '/customers',
   '/lists',
   '/notifications',
+  '/quotes',
   '/templates',
   '/priorities',
   '/line',

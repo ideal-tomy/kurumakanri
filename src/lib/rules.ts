@@ -14,6 +14,8 @@ export interface RuleTarget extends CustomerOverviewRow {
   rule_label: string;
   next_oil_target_km?: number | null;
   oil_overage_km?: number | null;
+  /** 主車両の最新見積（issued_at 降順 1 件）の total_amount。無ければ null */
+  latest_quote_total_amount: number | null;
 }
 
 const RULE_VIEW: Record<RuleKey, string> = {
@@ -22,25 +24,56 @@ const RULE_VIEW: Record<RuleKey, string> = {
   oil_4000km: 'v_targets_oil',
 };
 
-const RULE_LABEL: Record<RuleKey, string> = {
+export const RULE_LABEL: Record<RuleKey, string> = {
   shaken_180days: '車検半年前 (180日)',
   shaken_90days: '車検3か月前 (90日)',
   oil_4000km: 'オイル交換目安 (4,000km)',
 };
 
-export async function loadRuleTargets(rule: RuleKey): Promise<RuleTarget[]> {
-  const supabase = getServerSupabase();
-  const { data, error } = await supabase.from(RULE_VIEW[rule]).select('*');
-  if (error) throw new Error(error.message);
+export function ruleLabelFor(rule: RuleKey): string {
+  return RULE_LABEL[rule];
+}
 
-  return (data ?? []).map((row) => {
-    const r = row as OilTargetRow;
+async function mapTargetsWithLatestQuoteTotals(
+  supabase: ReturnType<typeof getServerSupabase>,
+  rule: RuleKey,
+  rows: OilTargetRow[],
+): Promise<RuleTarget[]> {
+  const vehicleIds = [...new Set(rows.map((r) => r.vehicle_id).filter(Boolean))] as string[];
+  const totalByVehicle = new Map<string, number>();
+  if (vehicleIds.length > 0) {
+    const { data: quoteRows, error: qErr } = await supabase
+      .from('quotes')
+      .select('vehicle_id, total_amount, issued_at')
+      .in('vehicle_id', vehicleIds)
+      .order('issued_at', { ascending: false });
+    if (qErr) throw new Error(qErr.message);
+    for (const q of quoteRows ?? []) {
+      const vid = (q as { vehicle_id: string }).vehicle_id;
+      if (!totalByVehicle.has(vid)) {
+        totalByVehicle.set(vid, (q as { total_amount: number }).total_amount);
+      }
+    }
+  }
+
+  return rows.map((r) => {
+    const vid = r.vehicle_id;
+    const latest = vid ? (totalByVehicle.get(vid) ?? null) : null;
     return {
       ...r,
       rule_key: rule,
       rule_label: RULE_LABEL[rule],
+      latest_quote_total_amount: latest,
     };
   });
+}
+
+export async function loadRuleTargets(rule: RuleKey): Promise<RuleTarget[]> {
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase.from(RULE_VIEW[rule]).select('*');
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as OilTargetRow[];
+  return mapTargetsWithLatestQuoteTotals(supabase, rule, rows);
 }
 
 /**
@@ -63,9 +96,19 @@ export function classifyTargets(
     const days = row.days_until_inspection ?? daysUntil(row.inspection_expire_date, today);
     if (days != null) {
       if (days >= 60 && days <= 100) {
-        out.shaken_90days.push({ ...row, rule_key: 'shaken_90days', rule_label: RULE_LABEL.shaken_90days });
+        out.shaken_90days.push({
+          ...row,
+          rule_key: 'shaken_90days',
+          rule_label: RULE_LABEL.shaken_90days,
+          latest_quote_total_amount: null,
+        });
       } else if (days >= 150 && days <= 210) {
-        out.shaken_180days.push({ ...row, rule_key: 'shaken_180days', rule_label: RULE_LABEL.shaken_180days });
+        out.shaken_180days.push({
+          ...row,
+          rule_key: 'shaken_180days',
+          rule_label: RULE_LABEL.shaken_180days,
+          latest_quote_total_amount: null,
+        });
       }
     }
 
@@ -92,6 +135,7 @@ export function classifyTargets(
         rule_label: RULE_LABEL.oil_4000km,
         next_oil_target_km: target,
         oil_overage_km: overage,
+        latest_quote_total_amount: null,
       });
     }
   }

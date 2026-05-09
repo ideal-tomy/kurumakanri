@@ -44,6 +44,7 @@ export interface QuoteEstimate extends QuoteTotals {
 export const DEFAULT_NOTES =
   '※ 足回り・タイヤ等の状態によっては、実車確認後に追加整備が必要となる場合があります。\n' +
   '※ 法令・手続区分により実費が変わることがあります。本書は概算です。\n' +
+  '※ エコカー減税・重量税の適用は、登録情報・実車・届出の内容により異なります（お客様の環境で変わることがあります）。店舗にてご確認ください。\n' +
   '※ 表示のうち法定費用相当は消費税の対象外、作業工賃・部品は10%込みです。';
 
 function lineTaxIncluded(

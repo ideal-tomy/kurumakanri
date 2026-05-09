@@ -15,6 +15,8 @@ export interface CustomerActionCardProps {
   taskId: string | null;
   showCompleteButton: boolean;
   ruleAvailable: boolean; // pickRuleKey で送信先テンプレが決まるか
+  /** 送信レビュー画面へ（任意） */
+  onLineReview?: () => void;
   onLineSend: () => void;
   onComplete: () => void;
   lineSending: boolean;
@@ -31,6 +33,7 @@ function daysLabel(days: number | null): string {
 export function CustomerActionCard(props: CustomerActionCardProps) {
   const urgency: UrgencyLevel = getUrgencyLevel(props.daysLeft);
   const lineDisabled = !props.hasLine || !props.ruleAvailable || props.lineSending;
+  const reviewDisabled = !props.ruleAvailable;
   const phoneDisabled = !props.phone;
   const completeDisabled = !props.showCompleteButton || props.completing;
 
@@ -78,6 +81,17 @@ export function CustomerActionCard(props: CustomerActionCardProps) {
         >
           {props.lineSending ? '送信中…' : lineHint ? lineHint : 'LINE'}
         </button>
+        {props.onLineReview ? (
+          <button
+            type="button"
+            className="btn-action btn-done"
+            onClick={props.onLineReview}
+            disabled={reviewDisabled}
+            title={reviewDisabled ? '通知タイミング外' : '本文と見積を確認してから送信'}
+          >
+            確認
+          </button>
+        ) : null}
         {props.phone ? (
           <a
             className="btn-action btn-phone"

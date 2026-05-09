@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: { id: string };
+  searchParams?: { quote?: string };
 }
 
 async function loadCustomer(id: string) {
@@ -63,11 +64,13 @@ async function loadCustomer(id: string) {
   };
 }
 
-export default async function CustomerDetailPage({ params }: PageProps) {
+export default async function CustomerDetailPage({ params, searchParams }: PageProps) {
   const { customer, vehicles, quotes, histories, consents } = await loadCustomer(
     params.id,
   );
   if (!customer) notFound();
+
+  const quoteBanner = searchParams?.quote === 'needs_vehicle';
 
   const lineConsent = consents.find((c) => c.channel === 'LINE');
   const mailConsent = consents.find((c) => c.channel === 'MAIL');
@@ -78,6 +81,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   return (
     <>
       <PageBack href="/customers" label="顧客一覧へ戻る" />
+      {quoteBanner ? (
+        <section
+          className="panel"
+          style={{ marginBottom: 16, padding: 14, borderLeft: '4px solid var(--warn)' }}
+        >
+          主車両が未登録のため見積ページを開けません。先に車両を登録してください。
+        </section>
+      ) : null}
       <div className="page-header">
         <div>
           <h1 className="page-title">{customer.name}</h1>
@@ -179,11 +190,9 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       <section className="panel" style={{ marginTop: 24 }}>
         <header className="panel-header">
           <div className="panel-title">最新の見積</div>
-          {primaryVehicle && (
-            <Link className="panel-link" href={`/quotes/${primaryVehicle.id}`}>
-              見積を見る →
-            </Link>
-          )}
+          <Link className="panel-link" href={`/quotes/by-customer/${customer.id}`}>
+            見積を見る →
+          </Link>
         </header>
         <div style={{ padding: 20 }}>
           {quotes.length === 0 ? (
@@ -260,9 +269,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           { href: '/customers', label: '顧客一覧へ戻る', primary: true },
           { href: '/customers/new', label: '+ 別の顧客を追加' },
           { href: '/priorities', label: '今日の連絡' },
-          ...(primaryVehicle
-            ? [{ href: `/quotes/${primaryVehicle.id}`, label: 'この車両の見積を見る' }]
-            : []),
+          { href: `/quotes/by-customer/${customer.id}`, label: 'この車両の見積を見る' },
         ]}
       />
     </>

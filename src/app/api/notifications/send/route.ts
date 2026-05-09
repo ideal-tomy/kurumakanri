@@ -3,13 +3,7 @@ import { z } from 'zod';
 import { requireStaff } from '@/lib/auth';
 import { dispatchNotification } from '@/lib/dispatcher';
 import { writeAudit } from '@/lib/audit';
-
-const ruleToTemplate: Record<string, string> = {
-  shaken_180days: 'shaken_180days',
-  shaken_90days: 'shaken_90days',
-  oil_4000km: 'oil_4000km',
-  custom: 'custom',
-};
+import { resolveNotificationTemplateKey } from '@/lib/notifications/rule-template';
 
 const Body = z.object({
   rule: z.enum(['shaken_180days', 'shaken_90days', 'oil_4000km', 'custom']),
@@ -28,7 +22,7 @@ export async function POST(req: Request) {
   }
 
   const channels = parsed.data.channel === 'BOTH' ? (['LINE', 'MAIL'] as const) : [parsed.data.channel];
-  const templateKey = parsed.data.template_key ?? ruleToTemplate[parsed.data.rule] ?? parsed.data.rule;
+  const templateKey = resolveNotificationTemplateKey(parsed.data.rule, parsed.data.template_key);
 
   let queued = 0;
   let sent = 0;

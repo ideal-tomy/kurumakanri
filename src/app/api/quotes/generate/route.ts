@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { buildQuoteFromVehicle, quoteTotalsForDb } from '@/lib/quote';
+import { insertIssuedQuoteForVehicle } from '@/lib/quotes/insert-issued-quote';
 import type { StatutoryFeeRateRow, VehicleRow } from '@/lib/supabase/types';
-import { writeAudit } from '@/lib/audit';
 
 const Body = z.object({
   vehicle_id: z.string().uuid(),
@@ -38,49 +37,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'vehicle not found' }, { status: 404 });
   }
 
-  const asOfDate = new Date().toISOString().slice(0, 10);
-  const estimate = buildQuoteFromVehicle({
-    vehicleSpecs: vehicle.vehicle_specs,
-    statutoryRates: rates,
-    asOfDate,
-    includeOilChange: parsed.data.include_oil ?? true,
-    notesAppend: parsed.data.notes_append,
-  });
+  const result = await insertIssuedQuoteForVehicle(
+    supabase,
+    { userId: ctx.userId, auditAction: 'quote.auto_generate' },
+    vehicle,
+    rates,
+    {
+      includeOilChange: parsed.data.include_oil ?? true,
+      notesAppend: parsed.data.notes_append,
+    },
+  );
 
-  const quoteNo = `QT-${new Date().getFullYear()}-${vehicle.id.slice(0, 8)}-${Date.now().toString(36)}`;
-  const taxCols = quoteTotalsForDb(estimate);
-
-  const { data, error } = await supabase
-    .from('quotes')
-    .insert({
-      vehicle_id: vehicle.id,
-      quote_no: quoteNo,
-      status: 'ISSUED',
-      total_amount: taxCols.total_amount,
-      grand_total: taxCols.grand_total,
-      taxable_subtotal_ex_tax: taxCols.taxable_subtotal_ex_tax,
-      tax_amount_10: taxCols.tax_amount_10,
-      non_taxable_subtotal: taxCols.non_taxable_subtotal,
-      legal_items: estimate.legal_items,
-      service_items: estimate.service_items,
-      notes: estimate.notes,
-      valid_until: vehicle.inspection_expire_date,
-      issued_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  await writeAudit({
-    userId: ctx.userId,
-    action: 'quote.auto_generate',
-    resource: 'quotes',
-    resourceId: data.id,
-    payload: { vehicleId: vehicle.id, total: estimate.grand_total },
-  });
-
-  return NextResponse.json({ id: data.id, ...estimate });
+  const { ok: _, ...rest } = result;
+  return NextResponse.json(rest);
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CustomerActionCard } from '@/components/customer-action-card';
 import type { PriorityQueueRow, TaskStatus, TaskType } from '@/lib/supabase/types';
 import {
@@ -11,6 +12,7 @@ import {
   computeDaysFromSortDueAt,
   pickRuleKeyFromQueueId,
 } from '@/lib/urgency';
+import { buildNotificationsReviewHref } from '@/lib/notifications/send-review-session';
 
 const FILTERS: Array<{ id: PriorityFilterMode; label: string }> = [
   { id: 'weekly', label: '今週やること' },
@@ -27,6 +29,7 @@ function ruleLabelFromQueueId(queueId: string): string | null {
 }
 
 export function PrioritiesClient() {
+  const router = useRouter();
   const [items, setItems] = useState<PriorityQueueRow[]>([]);
   const [sort, setSort] = useState<PrioritySortMode>('priority');
   const [filter, setFilter] = useState<PriorityFilterMode>('weekly');
@@ -153,6 +156,21 @@ export function PrioritiesClient() {
     }
     setMessage('対応済みにしました');
     await fetchItems();
+  }
+
+  function goToReviewFromQueue(item: PriorityQueueRow) {
+    const rk = pickRuleKeyFromQueueId(item.queue_id);
+    if (!item.customer_id || !rk) {
+      setError('このタスクはレビューのルールを判定できません。');
+      return;
+    }
+    router.push(
+      buildNotificationsReviewHref({
+        customerIds: [item.customer_id],
+        rule: rk,
+        channel: 'LINE',
+      }),
+    );
   }
 
   async function sendLine(item: PriorityQueueRow) {
@@ -291,6 +309,11 @@ export function PrioritiesClient() {
                   showCompleteButton={showCompleteButton}
                   ruleAvailable={ruleAvailable}
                   onLineSend={() => void sendLine(item)}
+                  onLineReview={
+                    ruleAvailable && item.customer_id
+                      ? () => goToReviewFromQueue(item)
+                      : undefined
+                  }
                   onComplete={() => void completeItem(item)}
                   lineSending={Boolean(sendingIds[item.queue_id])}
                   completing={Boolean(updatingIds[item.queue_id])}
