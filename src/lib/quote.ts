@@ -77,7 +77,7 @@ function lineNonTax(label: string, unit: number, qty = 1, category?: 'legal' | '
 }
 
 /** 開発・マスタ未取得時の法定行（標準自動車・非エコ例） */
-const LEGAL_ITEMS_FALLBACK: QuoteLineItem[] = [
+export const LEGAL_ITEMS_FALLBACK: QuoteLineItem[] = [
   lineNonTax('自動車重量税', 24600, 1, 'legal'),
   lineNonTax('自賠責保険24ヶ月', 17650, 1, 'legal'),
   lineNonTax('予備検査費用', 2200, 1, 'legal'),
@@ -266,7 +266,7 @@ export function buildQuoteFromVehicle(args: {
   if (rate) legal_items = legalLinesFromStatutory(rate, eco);
   else legal_items = [...LEGAL_ITEMS_FALLBACK];
 
-  let service_items = LABOR_ITEMS_DEFAULT(args.includeOilChange !== false);
+  let service_items = LABOR_ITEMS_DEFAULT(args.includeOilChange === true);
   if (args.extraServices?.length) service_items = [...service_items, ...args.extraServices];
   return buildQuoteEstimate({
     legal_items,

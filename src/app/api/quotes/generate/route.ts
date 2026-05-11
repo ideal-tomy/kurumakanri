@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     vehicle,
     rates,
     {
-      includeOilChange: parsed.data.include_oil ?? true,
+      includeOilChange: parsed.data.include_oil ?? false,
       notesAppend: parsed.data.notes_append,
     },
   );

@@ -19,7 +19,7 @@ export async function insertIssuedQuoteForVehicle(
     vehicleSpecs: vehicle.vehicle_specs,
     statutoryRates,
     asOfDate,
-    includeOilChange: opts?.includeOilChange ?? true,
+    includeOilChange: opts?.includeOilChange ?? false,
     notesAppend: opts?.notesAppend,
   });
 

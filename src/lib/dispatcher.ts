@@ -6,6 +6,10 @@ import { buildOptOutToken } from './optout';
 import { computeEstimatedMileage, daysUntil, nextOilTargetKm } from './mileage';
 import { buildIdempotencyKey } from './idempotency';
 import { buildQuoteShareToken, isQuoteShareConfigured } from './quote-share';
+import {
+  buildLegalFeesTextFallback,
+  buildLegalFeesTextFromQuote,
+} from './quotes/legal-fees-text';
 import type {
   CustomerOverviewRow,
   NotificationChannel,
@@ -63,7 +67,8 @@ export async function buildMessageVariables(
   const days = overview.days_until_inspection ?? daysUntil(overview.inspection_expire_date) ?? 0;
 
   let quoteUrl = `${siteUrl}/me?cid=${overview.customer_id}`;
-  if (isQuoteShareConfigured()) {
+  let latestLegalItemsJson: unknown = null;
+  if (overview.customer_id) {
     try {
       const srv = getServiceSupabase();
       const { data: vrows } = await srv.from('vehicles').select('id').eq('customer_id', overview.customer_id);
@@ -71,19 +76,26 @@ export async function buildMessageVariables(
       if (vid.length) {
         const { data: qr } = await srv
           .from('quotes')
-          .select('id')
+          .select('id, legal_items')
           .in('vehicle_id', vid)
           .order('issued_at', { ascending: false })
           .limit(1)
-          .maybeSingle<{ id: string }>();
+          .maybeSingle<{ id: string; legal_items: unknown }>();
         if (qr?.id) {
-          quoteUrl = `${siteUrl}/q/${buildQuoteShareToken(qr.id)}`;
+          latestLegalItemsJson = qr.legal_items;
+          if (isQuoteShareConfigured()) {
+            quoteUrl = `${siteUrl}/q/${buildQuoteShareToken(qr.id)}`;
+          }
         }
       }
     } catch (e) {
-      console.warn('[dispatcher] quote share url failed', e);
+      console.warn('[dispatcher] latest quote lookup failed', e);
     }
   }
+
+  const legalFees = latestLegalItemsJson
+    ? buildLegalFeesTextFromQuote(latestLegalItemsJson)
+    : buildLegalFeesTextFallback();
 
   return {
     name: overview.name,
@@ -93,9 +105,14 @@ export async function buildMessageVariables(
     daysLeft: String(days),
     mileage: estimated.toLocaleString('ja-JP'),
     nextOilTargetKm: oilTarget.toLocaleString('ja-JP'),
+    oilIntervalKm: oilInterval.toLocaleString('ja-JP'),
     quoteUrl,
     bookingUrl: `${siteUrl}/me?cid=${overview.customer_id}#booking`,
     unsubscribeUrl: `${siteUrl}/u/${optoutToken}`,
+    maintenanceInfoUrl: `${siteUrl}/info/maintenance`,
+    oilInfoUrl: `${siteUrl}/info/oil`,
+    legalFeesTotal: legalFees.totalFormatted,
+    legalFeesBreakdown: legalFees.breakdown,
   };
 }
 

@@ -113,8 +113,11 @@ export async function POST(req: Request) {
       if (!block) warnings.push(`メールテンプレ「${templateKey}」が見つかりません`);
     }
 
+    const isOilRule = parsed.data.rule === 'oil_4000km';
     const varsForQuoteLink = await buildMessageVariables(overview, { channel: wantLine ? 'LINE' : 'MAIL' });
-    const quoteLinkPreview = varsForQuoteLink.quoteUrl ?? null;
+    // 車検通知時のみ「お見積リンク」をプレビューに出す。
+    // オイル通知は別軸（オイル一覧URL）に切り替わったため非表示。
+    const quoteLinkPreview = isOilRule ? null : varsForQuoteLink.quoteUrl ?? null;
 
     let quoteBlock: {
       id: string;
@@ -136,7 +139,7 @@ export async function POST(req: Request) {
       };
     } | null = null;
 
-    if (overview.vehicle_id) {
+    if (overview.vehicle_id && !isOilRule) {
       const { data: q } = await supabase
         .from('quotes')
         .select('*')
