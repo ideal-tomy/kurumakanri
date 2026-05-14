@@ -77,6 +77,39 @@ export async function createCustomerAction(formData: FormData) {
     line_user_id: nullable(formData.get('line_user_id')),
   });
 
+  const force = formData.get('force') === 'on';
+  const hasVehicleFlag = formData.get('with_vehicle') === 'on';
+  const maker = nullable(formData.get('maker'));
+  const model = nullable(formData.get('model'));
+  const plate = nullable(formData.get('plate'));
+  const inspectionExpireDate = nullable(formData.get('inspection_expire_date'));
+  const allVehicleRequiredFilled = Boolean(maker && model && plate && inspectionExpireDate);
+
+  if (!force) {
+    if (customerData.phone) {
+      const { data: dupPhone } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('phone', customerData.phone)
+        .maybeSingle<{ id: string }>();
+      if (dupPhone?.id) {
+        throw new Error(`DUPLICATE_CUSTOMER:${dupPhone.id}:phone`);
+      }
+    }
+    if (hasVehicleFlag && allVehicleRequiredFilled && maker && model && plate) {
+      const { data: dupV } = await supabase
+        .from('vehicles')
+        .select('customer_id')
+        .eq('plate', plate)
+        .eq('maker', maker)
+        .eq('model', model)
+        .maybeSingle<{ customer_id: string }>();
+      if (dupV?.customer_id) {
+        throw new Error(`DUPLICATE_CUSTOMER:${dupV.customer_id}:vehicle`);
+      }
+    }
+  }
+
   const { data: customer, error } = await supabase
     .from('customers')
     .insert(customerData)
@@ -91,13 +124,6 @@ export async function createCustomerAction(formData: FormData) {
 
   // 車両情報は「メーカー・車種・ナンバー・車検満了日」の4項目すべて埋まっているときだけ insert する。
   // ウィザードの Step 1 だけで保存するケースを許容するため、いずれかが欠ければ車両は登録せず顧客のみ作る。
-  const hasVehicleFlag = formData.get('with_vehicle') === 'on';
-  const maker = nullable(formData.get('maker'));
-  const model = nullable(formData.get('model'));
-  const plate = nullable(formData.get('plate'));
-  const inspectionExpireDate = nullable(formData.get('inspection_expire_date'));
-  const allVehicleRequiredFilled = Boolean(maker && model && plate && inspectionExpireDate);
-
   if (hasVehicleFlag && allVehicleRequiredFilled) {
     const v = vehicleSchema.parse({
       maker,

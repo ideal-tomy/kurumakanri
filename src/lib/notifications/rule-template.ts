@@ -4,6 +4,8 @@ import type { RuleKey } from '@/lib/rules';
 export const ruleToNotificationTemplateKey: Record<RuleKey, string> = {
   shaken_180days: 'shaken_180days',
   shaken_90days: 'shaken_90days',
+  shaken_30days: 'shaken_30days',
+  shaken_overdue: 'shaken_overdue',
   oil_4000km: 'oil_4000km',
 };
 

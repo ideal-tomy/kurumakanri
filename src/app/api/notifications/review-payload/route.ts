@@ -15,7 +15,14 @@ import { ruleLabelFor } from '@/lib/rules';
 
 const Body = z.object({
   customer_ids: z.array(z.string().uuid()).min(1),
-  rule: z.enum(['shaken_180days', 'shaken_90days', 'oil_4000km', 'custom']),
+  rule: z.enum([
+    'shaken_180days',
+    'shaken_90days',
+    'shaken_30days',
+    'shaken_overdue',
+    'oil_4000km',
+    'custom',
+  ]),
   channel: z.enum(['LINE', 'MAIL', 'BOTH']),
   template_key: z.string().optional(),
 });

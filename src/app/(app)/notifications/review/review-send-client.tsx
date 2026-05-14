@@ -11,6 +11,7 @@ import {
   SEND_REVIEW_SESSION_KEY,
   canonicalReviewSearchFromLocationSearch,
   canonicalReviewSearchString,
+  coercePresetNotificationRule,
   parseChannelQueryParam,
   parseCustomersQueryParam,
   parseRuleQueryParam,
@@ -77,7 +78,7 @@ function ReviewSendClientInner() {
     const parsed = parseCustomersQueryParam(searchParams);
     if (parsed.kind === 'ok') {
       setCustomerIds(parsed.ids);
-      setRule(parseRuleQueryParam(searchParams.get('rule')) as SendReviewSessionPayload['rule']);
+      setRule(parseRuleQueryParam(searchParams.get('rule')));
       setChannel(parseChannelQueryParam(searchParams.get('channel')));
       setUrlInvalid(false);
       sessionStorage.removeItem(SEND_REVIEW_SESSION_KEY);
@@ -97,10 +98,7 @@ function ReviewSendClientInner() {
       if (raw) {
         const p = JSON.parse(raw) as SendReviewSessionPayload;
         if (Array.isArray(p.customerIds) && p.customerIds.length > 0 && typeof p.rule === 'string') {
-          const coercedRule =
-            p.rule === 'shaken_180days' || p.rule === 'shaken_90days' || p.rule === 'oil_4000km'
-              ? p.rule
-              : 'shaken_180days';
+          const coercedRule = coercePresetNotificationRule(typeof p.rule === 'string' ? p.rule : '');
           setCustomerIds(p.customerIds);
           setRule(coercedRule);
           setChannel(p.channel ?? 'LINE');
@@ -126,8 +124,7 @@ function ReviewSendClientInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_ids: customerIds,
-          rule:
-            rule === 'shaken_180days' || rule === 'shaken_90days' || rule === 'oil_4000km' ? rule : 'shaken_180days',
+          rule: coercePresetNotificationRule(rule),
           channel,
         }),
       });
@@ -140,10 +137,7 @@ function ReviewSendClientInner() {
       setItems(nextItems);
 
       if (typeof window !== 'undefined') {
-        const ruleForCanon =
-          rule === 'shaken_180days' || rule === 'shaken_90days' || rule === 'oil_4000km'
-            ? rule
-            : 'shaken_180days';
+        const ruleForCanon = coercePresetNotificationRule(rule);
         const want = canonicalReviewSearchString(customerIds, ruleForCanon, channel);
         const have = canonicalReviewSearchFromLocationSearch(window.location.search);
         if (want !== have) {
@@ -193,8 +187,7 @@ function ReviewSendClientInner() {
     }
     setSending(true);
     try {
-      const ruleForSend =
-        rule === 'shaken_180days' || rule === 'shaken_90days' || rule === 'oil_4000km' ? rule : 'shaken_180days';
+      const ruleForSend = coercePresetNotificationRule(rule);
       const res = await fetch('/api/notifications/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,6 +299,8 @@ function ReviewSendClientInner() {
             <select className="select" value={rule} onChange={(e) => setRule(e.target.value as typeof rule)}>
               <option value="shaken_180days">車検半年前</option>
               <option value="shaken_90days">車検3か月前</option>
+              <option value="shaken_30days">車検1ヶ月前</option>
+              <option value="shaken_overdue">車検満了後フォロー</option>
               <option value="oil_4000km">オイル交換目安</option>
             </select>
           </div>
@@ -349,7 +344,12 @@ function ReviewSendClientInner() {
             <thead>
               <tr style={{ background: 'var(--surface-2)' }}>
                 <th style={{ textAlign: 'left', padding: 10 }}>顧客</th>
-                <th style={{ textAlign: 'left', padding: 10 }}>見積</th>
+                <th style={{ textAlign: 'left', padding: 10 }}>
+                  {rule === 'oil_4000km' ? '見積（一式）' : '法定概算'}
+                  <div className="cust-meta" style={{ fontWeight: 400, marginTop: 2 }}>
+                    {rule === 'oil_4000km' ? '税込合計' : 'LINE本文と同じ主表示'}
+                  </div>
+                </th>
                 <th style={{ textAlign: 'left', padding: 10 }}>警告</th>
                 <th style={{ padding: 10 }}></th>
               </tr>
@@ -368,11 +368,24 @@ function ReviewSendClientInner() {
                       </td>
                       <td style={{ padding: 10 }}>
                         {row.quote ? (
-                          <>
-                            <strong>{formatYen(row.quote.grand_total)}</strong>
-                            <div className="cust-meta">{row.quote.quote_no ?? '-'}</div>
-                            <div className="cust-meta">{formatDate(row.quote.issued_at)}</div>
-                          </>
+                          rule === 'oil_4000km' ? (
+                            <>
+                              <strong>{formatYen(row.quote.grand_total)}</strong>
+                              <div className="cust-meta">税込一式</div>
+                              <div className="cust-meta">{row.quote.quote_no ?? '-'}</div>
+                              <div className="cust-meta">{formatDate(row.quote.issued_at)}</div>
+                            </>
+                          ) : (
+                            <>
+                              <strong>{formatYen(row.quote.tax_summary.non_taxable_subtotal)}</strong>
+                              <div className="cust-meta">法定・手数料（対象外）小計</div>
+                              <div className="cust-meta">
+                                一式（税込・参考）{formatYen(row.quote.grand_total)}
+                              </div>
+                              <div className="cust-meta">{row.quote.quote_no ?? '-'}</div>
+                              <div className="cust-meta">{formatDate(row.quote.issued_at)}</div>
+                            </>
+                          )
                         ) : (
                           <span className="cust-meta">—</span>
                         )}

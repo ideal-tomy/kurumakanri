@@ -1,5 +1,6 @@
 import { verifyQuoteShareToken } from '@/lib/quote-share';
 import { QuoteDocument } from '@/components/quote-document';
+import { PrintButton } from '@/components/print-button';
 import { parseIssuerFromEnv } from '@/lib/issuer';
 import { getServiceSupabase } from '@/lib/supabase/server';
 import { quoteTotalsForDisplay } from '@/lib/quote';
@@ -81,6 +82,7 @@ export default async function PublicQuotePage({ params }: PageProps) {
 
   return (
     <main className="quote-doc-shell">
+      <PrintButton />
       <QuoteDocument
         issuer={issuer}
         customerName={customer?.name ?? 'お客様'}
@@ -97,7 +99,7 @@ export default async function PublicQuotePage({ params }: PageProps) {
         taxAmount10={disp.tax_amount_10}
         nonTaxableSubtotal={disp.non_taxable_subtotal}
         grandTotal={disp.grand_total}
-        showPrintHint
+        showPrintHint={false}
       />
     </main>
   );

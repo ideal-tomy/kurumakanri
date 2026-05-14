@@ -7,7 +7,12 @@ import {
 } from './mileage';
 import type { CustomerOverviewRow, OilTargetRow } from './supabase/types';
 
-export type RuleKey = 'shaken_180days' | 'shaken_90days' | 'oil_4000km';
+export type RuleKey =
+  | 'shaken_180days'
+  | 'shaken_90days'
+  | 'shaken_30days'
+  | 'shaken_overdue'
+  | 'oil_4000km';
 
 export interface RuleTarget extends CustomerOverviewRow {
   rule_key: RuleKey;
@@ -21,12 +26,16 @@ export interface RuleTarget extends CustomerOverviewRow {
 const RULE_VIEW: Record<RuleKey, string> = {
   shaken_180days: 'v_targets_shaken_180',
   shaken_90days: 'v_targets_shaken_90',
+  shaken_30days: 'v_targets_shaken_30',
+  shaken_overdue: 'v_targets_shaken_overdue',
   oil_4000km: 'v_targets_oil',
 };
 
 export const RULE_LABEL: Record<RuleKey, string> = {
   shaken_180days: '車検半年前 (180日)',
   shaken_90days: '車検3か月前 (90日)',
+  shaken_30days: '車検1ヶ月前 (30日)',
+  shaken_overdue: '車検満了後フォロー',
   oil_4000km: 'オイル交換目安 (4,000km)',
 };
 
@@ -86,6 +95,8 @@ export function classifyTargets(
   const out: Record<RuleKey, RuleTarget[]> = {
     shaken_180days: [],
     shaken_90days: [],
+    shaken_30days: [],
+    shaken_overdue: [],
     oil_4000km: [],
   };
 
@@ -107,6 +118,20 @@ export function classifyTargets(
           ...row,
           rule_key: 'shaken_180days',
           rule_label: RULE_LABEL.shaken_180days,
+          latest_quote_total_amount: null,
+        });
+      } else if (days >= 0 && days <= 30) {
+        out.shaken_30days.push({
+          ...row,
+          rule_key: 'shaken_30days',
+          rule_label: RULE_LABEL.shaken_30days,
+          latest_quote_total_amount: null,
+        });
+      } else if (days >= -90 && days <= -1) {
+        out.shaken_overdue.push({
+          ...row,
+          rule_key: 'shaken_overdue',
+          rule_label: RULE_LABEL.shaken_overdue,
           latest_quote_total_amount: null,
         });
       }

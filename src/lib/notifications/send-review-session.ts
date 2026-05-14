@@ -1,11 +1,26 @@
 /** sessionStorage で送信レビュー画面へ渡すキー・型 */
 export const SEND_REVIEW_SESSION_KEY = 'kuruma:sendReview';
 
-export type SendReviewStoredRule =
-  | 'shaken_180days'
-  | 'shaken_90days'
-  | 'oil_4000km'
-  | 'custom';
+/** URL・レビュー画面で使うプリセット通知ルール（DB テンプレキーと一致） */
+export const PRESET_NOTIFICATION_RULES = [
+  'shaken_180days',
+  'shaken_90days',
+  'shaken_30days',
+  'shaken_overdue',
+  'oil_4000km',
+] as const;
+
+export type PresetNotificationRule = (typeof PRESET_NOTIFICATION_RULES)[number];
+
+export type SendReviewStoredRule = PresetNotificationRule | 'custom';
+
+export function isPresetNotificationRule(r: string): r is PresetNotificationRule {
+  return (PRESET_NOTIFICATION_RULES as readonly string[]).includes(r);
+}
+
+export function coercePresetNotificationRule(r: string): PresetNotificationRule {
+  return isPresetNotificationRule(r) ? r : 'shaken_180days';
+}
 
 export interface SendReviewSessionPayload {
   customerIds: string[];
@@ -36,11 +51,9 @@ export function parseCustomersQueryParam(searchParams: URLSearchParams): ParsedC
   return { kind: 'ok', ids };
 }
 
-const URL_RULES = ['shaken_180days', 'shaken_90days', 'oil_4000km'] as const;
-
-export function parseRuleQueryParam(raw: string | null): (typeof URL_RULES)[number] {
-  if (raw && (URL_RULES as readonly string[]).includes(raw)) {
-    return raw as (typeof URL_RULES)[number];
+export function parseRuleQueryParam(raw: string | null): PresetNotificationRule {
+  if (raw && isPresetNotificationRule(raw)) {
+    return raw;
   }
   return 'shaken_180days';
 }

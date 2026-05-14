@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { createCustomerAction } from '../actions';
 
@@ -31,6 +32,7 @@ const STEP_LABELS = ['基本', '車両', 'その他'] as const;
 export function CustomerWizard({ initialLineUserId = '' }: CustomerWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [error, setError] = useState<string | null>(null);
+  const [dupHint, setDupHint] = useState<{ id: string; reason: 'phone' | 'vehicle' } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<FormState>({
     name: '',
@@ -52,13 +54,7 @@ export function CustomerWizard({ initialLineUserId = '' }: CustomerWizardProps) 
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSubmit() {
-    setError(null);
-    if (!form.name.trim()) {
-      setError('氏名は必須です');
-      setStep(1);
-      return;
-    }
+  function buildFormData(includeForce: boolean): FormData {
     const fd = new FormData();
     fd.set('name', form.name.trim());
     fd.set('furigana', form.furigana.trim());
@@ -67,7 +63,6 @@ export function CustomerWizard({ initialLineUserId = '' }: CustomerWizardProps) 
     fd.set('notes', form.notes.trim());
     fd.set('line_user_id', form.line_user_id.trim());
 
-    // 車両：プレートと車検満了日があれば登録試行
     const wantsVehicle = Boolean(form.plate.trim() || form.inspection_expire_date);
     if (wantsVehicle) {
       fd.set('with_vehicle', 'on');
@@ -80,14 +75,37 @@ export function CustomerWizard({ initialLineUserId = '' }: CustomerWizardProps) 
       fd.set('last_oil_change_at', form.last_oil_change_at);
       fd.set('oil_interval_km', '4000');
     }
+    if (includeForce) fd.set('force', 'on');
+    return fd;
+  }
 
+  function submitWithForce(force: boolean) {
+    setError(null);
+    if (force) setDupHint(null);
+    if (!form.name.trim()) {
+      setError('氏名は必須です');
+      setStep(1);
+      return;
+    }
+    const fd = buildFormData(force);
     startTransition(async () => {
       try {
         await createCustomerAction(fd);
+        setDupHint(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : '登録に失敗しました');
+        const msg = e instanceof Error ? e.message : '';
+        const m = /^DUPLICATE_CUSTOMER:([0-9a-f-]{36}):(phone|vehicle)$/i.exec(msg);
+        if (m) {
+          setDupHint({ id: m[1], reason: m[2] as 'phone' | 'vehicle' });
+          return;
+        }
+        setError(msg || '登録に失敗しました');
       }
     });
+  }
+
+  function handleSubmit() {
+    submitWithForce(false);
   }
 
   function next() {
@@ -127,6 +145,24 @@ export function CustomerWizard({ initialLineUserId = '' }: CustomerWizardProps) 
           );
         })}
       </div>
+
+      {dupHint && (
+        <div
+          className="badge badge-warn"
+          style={{ display: 'block', padding: 12, marginBottom: 12, lineHeight: 1.6 }}
+        >
+          同じ{dupHint.reason === 'phone' ? '電話番号' : '車両（メーカー・車種・ナンバー）'}の顧客が既にいます（ID:{' '}
+          <code>{dupHint.id}</code>）。
+          <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Link className="btn btn-sm btn-primary" href={`/customers/${dupHint.id}`}>
+              同一として開く
+            </Link>
+            <button type="button" className="btn btn-sm" disabled={isPending} onClick={() => submitWithForce(true)}>
+              別人として続行（強制登録）
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="badge badge-danger" style={{ display: 'block', padding: 10, marginBottom: 12 }}>

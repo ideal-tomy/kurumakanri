@@ -9,21 +9,41 @@ export const dynamic = 'force-dynamic';
 const SLUG_TO_RULE: Record<string, RuleKey> = {
   'shaken-180': 'shaken_180days',
   'shaken-90': 'shaken_90days',
+  'shaken-30': 'shaken_30days',
+  'shaken-overdue': 'shaken_overdue',
   oil: 'oil_4000km',
 };
 
 const OTHER_LISTS: Record<RuleKey, NextActionItem[]> = {
   shaken_180days: [
     { href: '/lists/shaken-90', label: '車検3か月前リスト' },
+    { href: '/lists/shaken-30', label: '車検1ヶ月前リスト' },
+    { href: '/lists/shaken-overdue', label: '車検満了後フォロー' },
     { href: '/lists/oil', label: 'オイル交換目安' },
   ],
   shaken_90days: [
+    { href: '/lists/shaken-180', label: '車検半年前リスト' },
+    { href: '/lists/shaken-30', label: '車検1ヶ月前リスト' },
+    { href: '/lists/shaken-overdue', label: '車検満了後フォロー' },
+    { href: '/lists/oil', label: 'オイル交換目安' },
+  ],
+  shaken_30days: [
+    { href: '/lists/shaken-90', label: '車検3か月前リスト' },
+    { href: '/lists/shaken-180', label: '車検半年前リスト' },
+    { href: '/lists/shaken-overdue', label: '車検満了後フォロー' },
+    { href: '/lists/oil', label: 'オイル交換目安' },
+  ],
+  shaken_overdue: [
+    { href: '/lists/shaken-30', label: '車検1ヶ月前リスト' },
+    { href: '/lists/shaken-90', label: '車検3か月前リスト' },
     { href: '/lists/shaken-180', label: '車検半年前リスト' },
     { href: '/lists/oil', label: 'オイル交換目安' },
   ],
   oil_4000km: [
     { href: '/lists/shaken-180', label: '車検半年前リスト' },
     { href: '/lists/shaken-90', label: '車検3か月前リスト' },
+    { href: '/lists/shaken-30', label: '車検1ヶ月前リスト' },
+    { href: '/lists/shaken-overdue', label: '車検満了後フォロー' },
   ],
 };
 

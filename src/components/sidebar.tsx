@@ -11,18 +11,22 @@ interface NavCount {
 const items: Array<{
   href: string;
   label: string;
-  icon: 'dashboard' | 'users' | 'list' | 'bell' | 'doc' | 'tmpl';
+  icon: 'dashboard' | 'users' | 'list' | 'bell' | 'doc' | 'tmpl' | 'megaphone';
   group: 'main' | 'lists' | 'settings';
 }> = [
   { href: '/dashboard', label: 'ダッシュボード', icon: 'dashboard', group: 'main' },
   { href: '/priorities', label: '優先', icon: 'bell', group: 'main' },
   { href: '/customers', label: '顧客一覧', icon: 'users', group: 'main' },
+  { href: '/campaigns/new', label: 'キャンペーン', icon: 'megaphone', group: 'main' },
   { href: '/line/unmatched', label: 'LINE未マッチ', icon: 'users', group: 'main' },
   { href: '/lists/shaken-180', label: '車検半年前', icon: 'list', group: 'lists' },
   { href: '/lists/shaken-90', label: '車検3か月前', icon: 'list', group: 'lists' },
+  { href: '/lists/shaken-30', label: '車検1ヶ月前', icon: 'list', group: 'lists' },
+  { href: '/lists/shaken-overdue', label: '車検満了後', icon: 'list', group: 'lists' },
   { href: '/lists/oil', label: 'オイル交換目安', icon: 'list', group: 'lists' },
   { href: '/notifications/logs', label: '配信履歴', icon: 'doc', group: 'main' },
   { href: '/templates', label: 'テンプレート', icon: 'tmpl', group: 'settings' },
+  { href: '/admin/statutory', label: '法定費用マスタ', icon: 'doc', group: 'settings' },
 ];
 
 export function Sidebar({ counts }: { counts?: NavCount[] }) {
@@ -111,6 +115,14 @@ function Icon({ name }: { name: string }) {
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      );
+    case 'megaphone':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z" />
+          <path d="M16 8a5 5 0 0 1 0 8" />
+          <path d="M19 5a9 9 0 0 1 0 14" />
         </svg>
       );
     default:

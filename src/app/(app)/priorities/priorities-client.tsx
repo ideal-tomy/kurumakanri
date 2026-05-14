@@ -23,6 +23,8 @@ const FILTERS: Array<{ id: PriorityFilterMode; label: string }> = [
 function ruleLabelFromQueueId(queueId: string): string | null {
   if (queueId.startsWith('AUTO:SHAKEN90:')) return '車検 90日前';
   if (queueId.startsWith('AUTO:SHAKEN180:')) return '車検 180日前';
+  if (queueId.startsWith('AUTO:SHAKEN30:')) return '車検 30日前';
+  if (queueId.startsWith('AUTO:OVERDUE:')) return '車検満了後フォロー';
   if (queueId.startsWith('AUTO:OIL:')) return 'オイル交換目安';
   if (queueId.startsWith('MANUAL:')) return '手動タスク';
   return null;

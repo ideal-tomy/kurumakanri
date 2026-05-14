@@ -25,6 +25,11 @@ function row(overrides: Partial<CustomerOverviewRow>): CustomerOverviewRow {
     oil_interval_km: 4000,
     estimated_mileage: 30000,
     days_until_inspection: null,
+    last_line_sent_at: null,
+    next_notification_rule: null,
+    next_notification_due_at: null,
+    latest_quote_id: null,
+    latest_quote_grand_total: null,
     ...overrides,
   };
 }
@@ -42,6 +47,18 @@ describe('classifyTargets', () => {
     const r = classifyTargets([row({ days_until_inspection: 175 })]);
     const s180 = r.find((x) => x.rule === 'shaken_180days')!;
     expect(s180.rows.length).toBe(1);
+  });
+
+  it('classifies shaken_30 within window', () => {
+    const r = classifyTargets([row({ days_until_inspection: 15 })]);
+    const s30 = r.find((x) => x.rule === 'shaken_30days')!;
+    expect(s30.rows.length).toBe(1);
+  });
+
+  it('classifies shaken_overdue within window', () => {
+    const r = classifyTargets([row({ days_until_inspection: -10 })]);
+    const od = r.find((x) => x.rule === 'shaken_overdue')!;
+    expect(od.rows.length).toBe(1);
   });
 
   it('flags oil when estimated >= last + interval', () => {

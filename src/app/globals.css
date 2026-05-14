@@ -1160,11 +1160,18 @@ tbody tr.row-clickable:hover { background: var(--surface-2); }
 .quote-doc-sum .row.small { font-size: 12px; color: var(--ink-2); }
 .quote-doc-footer { margin-top: 32px; font-size: 12px; color: var(--ink-2); }
 
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
 @media print {
   body { background: #fff !important; }
   .quote-doc-screen-only,
   .no-print { display: none !important; }
   .quote-doc-shell { max-width: none; padding: 12mm; margin: 0; }
+  .quote-doc-table th.num,
+  .quote-doc-table td.num { display: table-cell !important; }
 }
 
 /* ============ RESPONSIVE ============ */
@@ -1192,4 +1199,7 @@ tbody tr.row-clickable:hover { background: var(--surface-2); }
   .page-title { font-size: 22px; }
   .kpi-grid { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
   .urgency-banner-value { font-size: 22px; }
+  .quote-doc-shell { padding: 16px 12px 40px; }
+  .quote-doc-table th.num,
+  .quote-doc-table td.num { display: none; }
 }

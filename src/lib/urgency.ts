@@ -39,20 +39,30 @@ export function computeDaysFromSortDueAt(sortDueAt: string | null): number | nul
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
-export type AutoRuleKey = 'shaken_90days' | 'shaken_180days' | 'oil_4000km';
+export type AutoRuleKey =
+  | 'shaken_90days'
+  | 'shaken_180days'
+  | 'shaken_30days'
+  | 'shaken_overdue'
+  | 'oil_4000km';
 
 /**
  * v_priority_queue.queue_id のプレフィックスから自動通知ルールを判定。
  * queue_id 例:
  *   AUTO:SHAKEN90:<customer_id>:<vehicle_id>
  *   AUTO:SHAKEN180:<customer_id>:<vehicle_id>
+ *   AUTO:SHAKEN30:<customer_id>:<vehicle_id>
+ *   AUTO:OVERDUE:<customer_id>:<vehicle_id>
  *   AUTO:OIL:<customer_id>:<vehicle_id>
  *   MANUAL:<task_id>
  */
 export function pickRuleKeyFromQueueId(queueId: string | null): AutoRuleKey | null {
   if (!queueId) return null;
-  if (queueId.startsWith('AUTO:SHAKEN90:')) return 'shaken_90days';
+  // 長いプレフィックスを先に判定（SHAKEN180 が SHAKEN90 の前方一致にならないよう順序に注意）
   if (queueId.startsWith('AUTO:SHAKEN180:')) return 'shaken_180days';
+  if (queueId.startsWith('AUTO:SHAKEN90:')) return 'shaken_90days';
+  if (queueId.startsWith('AUTO:SHAKEN30:')) return 'shaken_30days';
+  if (queueId.startsWith('AUTO:OVERDUE:')) return 'shaken_overdue';
   if (queueId.startsWith('AUTO:OIL:')) return 'oil_4000km';
   return null;
 }

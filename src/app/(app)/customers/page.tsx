@@ -3,7 +3,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { Badge, priorityVariant } from '@/components/badge';
 import { PageBack } from '@/components/page-back';
 import { NextActions } from '@/components/next-actions';
-import { formatDate, formatKm, priorityLabel } from '@/lib/format';
+import { formatDate, formatDateTime, formatKm, formatYen, priorityLabel } from '@/lib/format';
 import type { CustomerOverviewRow } from '@/lib/supabase/types';
 import { getUrgencyLevel } from '@/lib/urgency';
 
@@ -32,6 +32,18 @@ async function loadCustomers(params: SearchParams): Promise<CustomerOverviewRow[
   }
   if (params.filter === 'expired') {
     query = query.lt('days_until_inspection', 0);
+  }
+  if (params.filter === 'no_line') {
+    query = query.is('line_user_id', null);
+  }
+  if (params.filter === 'no_quote') {
+    query = query.is('latest_quote_id', null);
+  }
+  if (params.filter === 'stale_line') {
+    const d = new Date();
+    d.setDate(d.getDate() - 90);
+    const iso = d.toISOString();
+    query = query.or(`last_line_sent_at.is.null,last_line_sent_at.lt.${iso}`);
   }
 
   const { data } = await query;
@@ -70,11 +82,14 @@ export default async function CustomersPage({
             placeholder="氏名・ナンバー・電話番号"
             defaultValue={searchParams.q ?? ''}
           />
-          <select className="select" style={{ maxWidth: 200 }} name="filter" defaultValue={searchParams.filter ?? ''}>
+          <select className="select" style={{ maxWidth: 220 }} name="filter" defaultValue={searchParams.filter ?? ''}>
             <option value="">すべて</option>
             <option value="90">90日以内</option>
             <option value="180">180日以内</option>
             <option value="expired">期限切れ</option>
+            <option value="no_line">LINE未連携</option>
+            <option value="stale_line">3か月以上LINE未送信</option>
+            <option value="no_quote">見積未作成</option>
           </select>
           <button className="btn" type="submit">
             検索
@@ -90,6 +105,9 @@ export default async function CustomersPage({
                 <th>車両</th>
                 <th>満了日</th>
                 <th>残日数</th>
+                <th>次の連絡</th>
+                <th>最終LINE</th>
+                <th>見積</th>
                 <th>推定走行</th>
                 <th>優先度</th>
                 <th></th>
@@ -98,7 +116,7 @@ export default async function CustomersPage({
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={10}>
                     <div className="empty">該当する顧客がありません</div>
                   </td>
                 </tr>
@@ -128,12 +146,29 @@ export default async function CustomersPage({
                           (row.days_until_inspection ?? 999) <= 30
                             ? 'urgent'
                             : (row.days_until_inspection ?? 999) <= 90
-                            ? 'warn'
-                            : 'ok'
+                              ? 'warn'
+                              : 'ok'
                         }`}
                       >
                         {priorityLabel(row.days_until_inspection)}
                       </span>
+                    </td>
+                    <td className="cust-meta" style={{ fontSize: 12, maxWidth: 200 }}>
+                      {row.next_notification_rule ? (
+                        <>
+                          {row.next_notification_rule}
+                          <br />
+                          {formatDate(row.next_notification_due_at ?? row.inspection_expire_date)}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="cust-meta" style={{ fontSize: 12 }}>
+                      {row.last_line_sent_at ? formatDateTime(row.last_line_sent_at) : '—'}
+                    </td>
+                    <td className="cust-meta" style={{ fontSize: 12 }}>
+                      {row.latest_quote_grand_total != null ? formatYen(row.latest_quote_grand_total) : '—'}
                     </td>
                     <td>{formatKm(row.estimated_mileage)}</td>
                     <td>
@@ -141,8 +176,8 @@ export default async function CustomersPage({
                         {priorityVariant(row.days_until_inspection) === 'danger'
                           ? '緊急'
                           : priorityVariant(row.days_until_inspection) === 'warn'
-                          ? '近接'
-                          : '余裕'}
+                            ? '近接'
+                            : '余裕'}
                       </Badge>
                     </td>
                     <td>
@@ -187,6 +222,14 @@ export default async function CustomersPage({
                       ) : (
                         <div className="list-card-meta">車両未登録</div>
                       )}
+                      <div className="list-card-meta" style={{ marginTop: 6 }}>
+                        次: {row.next_notification_rule ?? '—'}{' '}
+                        {row.next_notification_due_at || row.inspection_expire_date
+                          ? `(${formatDate(row.next_notification_due_at ?? row.inspection_expire_date)})`
+                          : ''}{' '}
+                        / 最終LINE: {row.last_line_sent_at ? formatDateTime(row.last_line_sent_at) : '—'} / 見積:{' '}
+                        {row.latest_quote_grand_total != null ? formatYen(row.latest_quote_grand_total) : '—'}
+                      </div>
                     </div>
                     <div className="list-card-side">
                       <div className={`list-card-days ${urgency}`}>
@@ -205,13 +248,8 @@ export default async function CustomersPage({
                           ? '近接'
                           : '余裕'}
                     </Badge>
-                    <span className="list-card-meta">
-                      推定走行 {formatKm(row.estimated_mileage)}
-                    </span>
-                    <Link
-                      className="btn btn-sm list-card-cta"
-                      href={`/customers/${row.customer_id}`}
-                    >
+                    <span className="list-card-meta">推定走行 {formatKm(row.estimated_mileage)}</span>
+                    <Link className="btn btn-sm list-card-cta" href={`/customers/${row.customer_id}`}>
                       詳細
                     </Link>
                   </div>

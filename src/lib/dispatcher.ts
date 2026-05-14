@@ -10,6 +10,7 @@ import {
   buildLegalFeesTextFallback,
   buildLegalFeesTextFromQuote,
 } from './quotes/legal-fees-text';
+import { formatDate, formatYen } from './format';
 import type {
   CustomerOverviewRow,
   NotificationChannel,
@@ -68,6 +69,8 @@ export async function buildMessageVariables(
 
   let quoteUrl = `${siteUrl}/me?cid=${overview.customer_id}`;
   let latestLegalItemsJson: unknown = null;
+  let latestQuoteGrandTotal: number | null = null;
+  let latestQuoteValidUntil: string | null = null;
   if (overview.customer_id) {
     try {
       const srv = getServiceSupabase();
@@ -76,13 +79,21 @@ export async function buildMessageVariables(
       if (vid.length) {
         const { data: qr } = await srv
           .from('quotes')
-          .select('id, legal_items')
+          .select('id, legal_items, grand_total, total_amount, valid_until')
           .in('vehicle_id', vid)
           .order('issued_at', { ascending: false })
           .limit(1)
-          .maybeSingle<{ id: string; legal_items: unknown }>();
+          .maybeSingle<{
+            id: string;
+            legal_items: unknown;
+            grand_total: number | null;
+            total_amount: number;
+            valid_until: string | null;
+          }>();
         if (qr?.id) {
           latestLegalItemsJson = qr.legal_items;
+          latestQuoteGrandTotal = qr.grand_total ?? qr.total_amount ?? null;
+          latestQuoteValidUntil = qr.valid_until;
           if (isQuoteShareConfigured()) {
             quoteUrl = `${siteUrl}/q/${buildQuoteShareToken(qr.id)}`;
           }
@@ -97,9 +108,15 @@ export async function buildMessageVariables(
     ? buildLegalFeesTextFromQuote(latestLegalItemsJson)
     : buildLegalFeesTextFallback();
 
+  const vehicleName = `${overview.maker ?? ''} ${overview.model ?? ''}`.trim() || 'お車';
+
+  // grandTotal: 見積の税込一式（legal+service）。車検リマインド本文の「主たる金額」には使わず、
+  // legalFeesTotal / legalFeesBreakdown を使う（テンプレは 0014_notify_legal_primary 以降で統一）。
+
   return {
     name: overview.name,
-    carName: `${overview.maker ?? ''} ${overview.model ?? ''}`.trim() || 'お車',
+    carName: vehicleName,
+    vehicleName,
     plate: overview.plate ?? '',
     expireDate: overview.inspection_expire_date ?? '',
     daysLeft: String(days),
@@ -113,6 +130,8 @@ export async function buildMessageVariables(
     oilInfoUrl: `${siteUrl}/info/oil`,
     legalFeesTotal: legalFees.totalFormatted,
     legalFeesBreakdown: legalFees.breakdown,
+    grandTotal: formatYen(latestQuoteGrandTotal),
+    validUntil: formatDate(latestQuoteValidUntil),
   };
 }
 

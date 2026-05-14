@@ -1,8 +1,7 @@
 import { getServerSupabase } from '@/lib/supabase/server';
-import { Badge } from '@/components/badge';
 import { PageBack } from '@/components/page-back';
 import { NextActions } from '@/components/next-actions';
-import { formatDateTime } from '@/lib/format';
+import { TemplatesEditor } from './templates-editor';
 import type { TemplateVersionRow } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
@@ -23,55 +22,25 @@ export default async function TemplatesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">テンプレート</h1>
-          <div className="page-sub">通知文面のテンプレ一覧（編集はテキストファイル直接運用想定）</div>
+          <div className="page-sub">通知文面のテンプレ一覧（画面から編集可）</div>
         </div>
       </div>
 
       <section className="panel">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>キー</th>
-                <th>チャネル</th>
-                <th>件名</th>
-                <th>状態</th>
-                <th>更新</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <div className="empty">テンプレートがありません</div>
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.template_key}</td>
-                    <td>
-                      <Badge variant={r.channel === 'LINE' ? 'info' : 'neutral'}>{r.channel}</Badge>
-                    </td>
-                    <td>{r.subject ?? '-'}</td>
-                    <td>
-                      <Badge variant={r.active ? 'success' : 'neutral'}>
-                        {r.active ? `v${r.version} 有効` : `v${r.version}`}
-                      </Badge>
-                    </td>
-                    <td>{formatDateTime(r.created_at)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <TemplatesEditor rows={rows} />
         <div style={{ padding: 16, fontSize: 12, color: 'var(--ink-3)' }}>
           差し込み変数: <code>{'{{name}}'}</code> <code>{'{{carName}}'}</code>{' '}
           <code>{'{{plate}}'}</code> <code>{'{{expireDate}}'}</code>{' '}
           <code>{'{{daysLeft}}'}</code> <code>{'{{mileage}}'}</code>{' '}
           <code>{'{{nextOilTargetKm}}'}</code> <code>{'{{quoteUrl}}'}</code>{' '}
+          <code>{'{{grandTotal}}'}</code> <code>{'{{validUntil}}'}</code> <code>{'{{vehicleName}}'}</code>{' '}
+          <code>{'{{legalFeesTotal}}'}</code> <code>{'{{legalFeesBreakdown}}'}</code>{' '}
+          <code>{'{{maintenanceInfoUrl}}'}</code> <code>{'{{oilInfoUrl}}'}</code> <code>{'{{oilIntervalKm}}'}</code>{' '}
           <code>{'{{bookingUrl}}'}</code> <code>{'{{unsubscribeUrl}}'}</code>
+        </div>
+        <div style={{ padding: '0 16px 16px', fontSize: 12, color: 'var(--ink-2)' }}>
+          車検系（shaken_*）の既定文面は、顧客向けの<strong>主たる金額を法定概算（{'{{legalFeesTotal}}'}）</strong>にし、税込一式（{'{{grandTotal}}'}）は本文先頭に載せません。一式は{' '}
+          <code>{'{{quoteUrl}}'}</code> の見積ページで確認してもらう方針です（DB migration 0014 以降）。
         </div>
       </section>
 

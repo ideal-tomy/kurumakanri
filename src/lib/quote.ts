@@ -15,7 +15,7 @@ export interface QuoteLineItem {
   quantity: number;
   unit_price: number;
   tax_treatment: TaxTreatment;
-  category?: 'legal' | 'service';
+  category?: 'legal' | 'service' | 'discount';
 }
 
 export interface VehicleSpecs {
@@ -51,7 +51,7 @@ function lineTaxIncluded(
   label: string,
   unitTaxInc: number,
   qty = 1,
-  category?: 'legal' | 'service',
+  category?: 'legal' | 'service' | 'discount',
 ): QuoteLineItem {
   const amount = qty * unitTaxInc;
   return {
@@ -112,7 +112,7 @@ export function computeTotalsFromParts(
     else taxable_tax_included += i.amount;
   }
   const taxable_subtotal_ex_tax = Math.round(taxable_tax_included / 1.1);
-  const tax_amount_10 = Math.max(0, taxable_tax_included - taxable_subtotal_ex_tax);
+  const tax_amount_10 = taxable_tax_included - taxable_subtotal_ex_tax;
   const grand_total = non_taxable_subtotal + taxable_tax_included;
   return {
     non_taxable_subtotal,
@@ -164,15 +164,19 @@ export function normalizeQuoteLineItem(raw: unknown): QuoteLineItem | null {
         : amount;
   const tt = o.tax_treatment === 'NON_TAXABLE' || o.tax_treatment === 'TAXABLE_10' ? o.tax_treatment : null;
   const category =
-    o.category === 'legal' || o.category === 'service' ? (o.category as 'legal' | 'service') : undefined;
+    o.category === 'legal' || o.category === 'service' || o.category === 'discount'
+      ? (o.category as 'legal' | 'service' | 'discount')
+      : undefined;
   const inferredTax: TaxTreatment =
     tt ??
-    (category === 'service' ||
-    String(label).includes('工賃') ||
-    String(label).includes('交換') ||
-    String(label).includes('点検費')
+    (category === 'discount'
       ? 'TAXABLE_10'
-      : 'NON_TAXABLE');
+      : category === 'service' ||
+          String(label).includes('工賃') ||
+          String(label).includes('交換') ||
+          String(label).includes('点検費')
+        ? 'TAXABLE_10'
+        : 'NON_TAXABLE');
   return {
     label,
     quantity: quantity > 0 ? quantity : 1,

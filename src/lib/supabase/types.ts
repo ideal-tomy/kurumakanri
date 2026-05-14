@@ -102,6 +102,14 @@ export interface CustomerOverviewRow {
   oil_interval_km: number | null;
   estimated_mileage: number | null;
   days_until_inspection: number | null;
+  /** 0012: 直近の LINE 送信成功日時 */
+  last_line_sent_at?: string | null;
+  /** 0012: 現在の日数から見た通知フェーズラベル */
+  next_notification_rule?: string | null;
+  /** 0012: 車検満了日（アンカー） */
+  next_notification_due_at?: string | null;
+  latest_quote_id?: string | null;
+  latest_quote_grand_total?: number | null;
 }
 
 export interface OilTargetRow extends CustomerOverviewRow {
@@ -125,6 +133,7 @@ export interface NotificationJobRow {
   requested_by: string | null;
   created_at: string;
   updated_at: string;
+  campaign_id?: string | null;
 }
 
 export interface NotificationLogRow {

@@ -8,9 +8,11 @@ export const dynamic = 'force-dynamic';
 
 async function getCounts() {
   const supabase = getServerSupabase();
-  const [s180, s90, oil, priorities, lineUnmatched] = await Promise.all([
+  const [s180, s90, s30, overdue, oil, priorities, lineUnmatched] = await Promise.all([
     supabase.from('v_targets_shaken_180').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_targets_shaken_90').select('customer_id', { count: 'exact', head: true }),
+    supabase.from('v_targets_shaken_30').select('customer_id', { count: 'exact', head: true }),
+    supabase.from('v_targets_shaken_overdue').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_targets_oil').select('customer_id', { count: 'exact', head: true }),
     supabase.from('v_priority_queue').select('queue_id', { count: 'exact', head: true }).in('status', ['OPEN', 'IN_PROGRESS']),
     supabase.from('v_line_unmatched').select('line_user_id', { count: 'exact', head: true }),
@@ -19,6 +21,8 @@ async function getCounts() {
     { href: '/priorities', count: priorities.count ?? 0 },
     { href: '/lists/shaken-180', count: s180.count ?? 0 },
     { href: '/lists/shaken-90', count: s90.count ?? 0 },
+    { href: '/lists/shaken-30', count: s30.count ?? 0 },
+    { href: '/lists/shaken-overdue', count: overdue.count ?? 0 },
     { href: '/lists/oil', count: oil.count ?? 0 },
     { href: '/line/unmatched', count: lineUnmatched.count ?? 0 },
   ];
