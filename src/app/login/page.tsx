@@ -50,7 +50,7 @@ export default function LoginPage({
           </div>
         )}
 
-        <LoginForm next={searchParams.next ?? '/priorities'} />
+        <LoginForm next={searchParams.next ?? '/'} />
       </div>
     </div>
   );

@@ -1,26 +1,27 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { getUrgencyLevel, type UrgencyLevel } from '@/lib/urgency';
 
 export interface CustomerActionCardProps {
   customerId: string | null;
   customerName: string | null;
   phone: string | null;
-  hasLine: boolean; // line_user_id が登録されているか
-  vehicleLabel?: string | null; // 例: "トヨタ プリウス"
+  hasLine: boolean;
+  vehicleLabel?: string | null;
   plate?: string | null;
   daysLeft: number | null;
-  ruleLabel?: string | null; // 例: "車検 90日前", "オイル交換目安"
-  taskId: string | null;
+  ruleLabel?: string | null;
+  /** AUTO 通知の送信プレビュー対象か */
+  ruleAvailable: boolean;
+  /** 完了を記録できるか */
   showCompleteButton: boolean;
-  ruleAvailable: boolean; // pickRuleKey で送信先テンプレが決まるか
-  /** 送信レビュー画面へ（任意） */
-  onLineReview?: () => void;
-  onLineSend: () => void;
+  /** 手動タスク（MANUAL）か */
+  isManualTask: boolean;
+  onOpenPreview: () => void;
   onComplete: () => void;
-  lineSending: boolean;
-  completing: boolean;
+  completing?: boolean;
 }
 
 function daysLabel(days: number | null): string {
@@ -32,21 +33,47 @@ function daysLabel(days: number | null): string {
 
 export function CustomerActionCard(props: CustomerActionCardProps) {
   const urgency: UrgencyLevel = getUrgencyLevel(props.daysLeft);
-  const lineDisabled = !props.hasLine || !props.ruleAvailable || props.lineSending;
-  const reviewDisabled = !props.ruleAvailable;
-  const phoneDisabled = !props.phone;
-  const completeDisabled = !props.showCompleteButton || props.completing;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuWrapRef = useRef<HTMLDivElement>(null);
 
-  const lineHint = !props.hasLine
-    ? 'LINE未連携'
-    : !props.ruleAvailable
-      ? '通知タイミング外'
-      : '';
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocDown(e: MouseEvent) {
+      const el = menuWrapRef.current;
+      if (el && !el.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [menuOpen]);
+
+  const previewDisabled =
+    props.ruleAvailable && (!props.hasLine || !props.customerId);
+
+  let primaryLabel = '見積を確認して送付 ▶';
+  let primaryAction: (() => void) | undefined = props.onOpenPreview;
+  let primaryDisabled = false;
+
+  if (props.ruleAvailable) {
+    primaryDisabled = previewDisabled;
+    if (!props.hasLine) primaryLabel = 'LINE未連携';
+  } else if (props.isManualTask && props.showCompleteButton) {
+    primaryLabel = '対応を完了する';
+    primaryAction = props.onComplete;
+    primaryDisabled = props.completing ?? false;
+  } else if (props.showCompleteButton) {
+    primaryLabel = '完了にする';
+    primaryAction = props.onComplete;
+    primaryDisabled = props.completing ?? false;
+  } else {
+    primaryLabel = '送付対象外';
+    primaryAction = undefined;
+    primaryDisabled = true;
+  }
 
   return (
     <li className={`action-card ${urgency}`}>
       <div className="action-card-header">
-        <div>
+        <div className="action-card-header-main">
           {props.customerId ? (
             <Link href={`/customers/${props.customerId}`} className="action-card-title">
               {props.customerName ?? '名前未設定'} 様
@@ -60,59 +87,66 @@ export function CustomerActionCard(props: CustomerActionCardProps) {
               {props.plate && <span className="plate">{props.plate}</span>}
             </div>
           )}
-          {props.ruleLabel && (
-            <div className="action-card-meta">{props.ruleLabel}</div>
-          )}
+          {props.ruleLabel && <div className="action-card-meta">{props.ruleLabel}</div>}
         </div>
-        <div>
-          <div className="action-card-days-label">残日数</div>
-          <div className={`action-card-days ${urgency}`}>{daysLabel(props.daysLeft)}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div className="action-card-menu-wrap" ref={menuWrapRef}>
+            <button
+              type="button"
+              className="action-card-menu-btn"
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
+              aria-label="その他の操作"
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              ⋯
+            </button>
+            {menuOpen ? (
+              <ul className="action-card-menu-popover" role="menu">
+                <li>
+                  {props.phone ? (
+                    <a href={`tel:${props.phone}`} role="menuitem" onClick={() => setMenuOpen(false)}>
+                      電話する
+                    </a>
+                  ) : (
+                    <button type="button" disabled>
+                      電話（番号なし）
+                    </button>
+                  )}
+                </li>
+                {props.showCompleteButton ? (
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={props.completing}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void props.onComplete();
+                      }}
+                    >
+                      {props.completing ? '更新中…' : '完了にする'}
+                    </button>
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+          <div>
+            <div className="action-card-days-label">残日数</div>
+            <div className={`action-card-days ${urgency}`}>{daysLabel(props.daysLeft)}</div>
+          </div>
         </div>
       </div>
 
-      <div className="action-card-actions">
+      <div className="action-card-actions action-card-actions-single">
         <button
           type="button"
-          className="btn-action btn-line"
-          onClick={props.onLineSend}
-          disabled={lineDisabled}
-          aria-label={lineHint || 'LINE通知を送信'}
-          title={lineHint || 'LINE通知を送信'}
+          className="btn-action btn-action-primary-send"
+          disabled={primaryDisabled || !primaryAction}
+          onClick={() => primaryAction?.()}
         >
-          {props.lineSending ? '送信中…' : lineHint ? lineHint : 'LINE'}
-        </button>
-        {props.onLineReview ? (
-          <button
-            type="button"
-            className="btn-action btn-done"
-            onClick={props.onLineReview}
-            disabled={reviewDisabled}
-            title={reviewDisabled ? '通知タイミング外' : '本文と見積を確認してから送信'}
-          >
-            確認
-          </button>
-        ) : null}
-        {props.phone ? (
-          <a
-            className="btn-action btn-phone"
-            href={`tel:${props.phone}`}
-            aria-label={`${props.customerName ?? ''}に電話する`}
-          >
-            電話
-          </a>
-        ) : (
-          <button type="button" className="btn-action btn-phone" disabled aria-label="電話番号未登録">
-            電話
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn-action btn-done"
-          onClick={props.onComplete}
-          disabled={completeDisabled}
-          aria-label="このタスクを完了にする"
-        >
-          {props.completing ? '更新中…' : '完了'}
+          {primaryLabel}
         </button>
       </div>
     </li>

@@ -58,7 +58,7 @@ export default async function ListPage({ params }: PageProps) {
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">{RULE_LABELS[ruleKey]}</h1>
@@ -73,8 +73,8 @@ export default async function ListPage({ params }: PageProps) {
       <NextActions
         items={[
           ...OTHER_LISTS[ruleKey],
-          { href: '/notifications/logs', label: '配信履歴' },
-          { href: '/priorities', label: '今日の連絡', primary: true },
+          { href: '/history', label: '送付履歴' },
+          { href: '/', label: 'ホーム', primary: true },
         ]}
       />
     </>

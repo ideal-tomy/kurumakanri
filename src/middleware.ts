@@ -11,6 +11,7 @@ const PROTECTED_PREFIXES = [
   '/templates',
   '/priorities',
   '/line',
+  '/history',
 ];
 
 const PUBLIC_PREFIXES = ['/login', '/u/', '/me', '/q/', '/api/webhooks', '/api/public'];

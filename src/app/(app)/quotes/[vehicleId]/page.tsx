@@ -12,8 +12,10 @@ export const dynamic = 'force-dynamic';
 
 export default async function QuoteListPage({
   params,
+  searchParams,
 }: {
   params: { vehicleId: string };
+  searchParams?: { notify?: string };
 }) {
   const supabase = getServerSupabase();
 
@@ -56,12 +58,19 @@ export default async function QuoteListPage({
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
   const canShareQuote = Boolean(siteUrl && isQuoteShareConfigured());
 
+  const fromNotify = searchParams?.notify === '1';
+
   return (
     <>
       <PageBack
         href={`/customers/${vehicle.customer_id}`}
         label="顧客詳細へ戻る"
       />
+      {fromNotify && (
+        <div className="badge badge-warn" style={{ marginBottom: 12, padding: 12, display: 'block', fontSize: 14 }}>
+          送付確認から開いています。明細を保存したら、<strong>送付確認のタブ</strong>に戻り「金額・本文を再取得」を押してから LINE で送付してください。
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">
@@ -97,7 +106,7 @@ export default async function QuoteListPage({
         items={[
           { href: `/customers/${vehicle.customer_id}`, label: '顧客詳細へ戻る', primary: true },
           { href: '/customers', label: '顧客一覧' },
-          { href: '/priorities', label: '今日の連絡' },
+          { href: '/', label: 'ホーム' },
         ]}
       />
     </>

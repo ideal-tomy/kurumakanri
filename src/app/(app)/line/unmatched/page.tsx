@@ -49,7 +49,7 @@ export default async function LineUnmatchedPage({
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">LINE 未マッチ一覧</h1>
@@ -153,7 +153,7 @@ export default async function LineUnmatchedPage({
         items={[
           { href: '/customers', label: '顧客一覧' },
           { href: '/customers/new', label: '+ 顧客を追加', primary: true },
-          { href: '/priorities', label: '今日の連絡' },
+          { href: '/', label: 'ホーム' },
         ]}
       />
     </>

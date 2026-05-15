@@ -14,8 +14,7 @@ const items: Array<{
   icon: 'dashboard' | 'users' | 'list' | 'bell' | 'doc' | 'tmpl' | 'megaphone';
   group: 'main' | 'lists' | 'settings';
 }> = [
-  { href: '/dashboard', label: 'ダッシュボード', icon: 'dashboard', group: 'main' },
-  { href: '/priorities', label: '優先', icon: 'bell', group: 'main' },
+  { href: '/', label: 'ホーム（通知リスト）', icon: 'bell', group: 'main' },
   { href: '/customers', label: '顧客一覧', icon: 'users', group: 'main' },
   { href: '/campaigns/new', label: 'キャンペーン', icon: 'megaphone', group: 'main' },
   { href: '/line/unmatched', label: 'LINE未マッチ', icon: 'users', group: 'main' },
@@ -24,8 +23,9 @@ const items: Array<{
   { href: '/lists/shaken-30', label: '車検1ヶ月前', icon: 'list', group: 'lists' },
   { href: '/lists/shaken-overdue', label: '車検満了後', icon: 'list', group: 'lists' },
   { href: '/lists/oil', label: 'オイル交換目安', icon: 'list', group: 'lists' },
-  { href: '/notifications/logs', label: '配信履歴', icon: 'doc', group: 'main' },
+  { href: '/history', label: '送付履歴', icon: 'doc', group: 'main' },
   { href: '/templates', label: 'テンプレート', icon: 'tmpl', group: 'settings' },
+  { href: '/dashboard', label: '経営サマリ', icon: 'dashboard', group: 'settings' },
   { href: '/admin/statutory', label: '法定費用マスタ', icon: 'doc', group: 'settings' },
 ];
 

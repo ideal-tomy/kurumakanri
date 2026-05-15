@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CustomerActionCard } from '@/components/customer-action-card';
+import { PreviewBottomSheet } from '@/components/preview-bottom-sheet';
 import type { PriorityQueueRow, TaskStatus, TaskType } from '@/lib/supabase/types';
 import {
   type PriorityFilterMode,
@@ -11,8 +11,8 @@ import {
 import {
   computeDaysFromSortDueAt,
   pickRuleKeyFromQueueId,
+  type AutoRuleKey,
 } from '@/lib/urgency';
-import { buildNotificationsReviewHref } from '@/lib/notifications/send-review-session';
 
 const FILTERS: Array<{ id: PriorityFilterMode; label: string }> = [
   { id: 'weekly', label: '今週やること' },
@@ -31,7 +31,6 @@ function ruleLabelFromQueueId(queueId: string): string | null {
 }
 
 export function PrioritiesClient() {
-  const router = useRouter();
   const [items, setItems] = useState<PriorityQueueRow[]>([]);
   const [sort, setSort] = useState<PrioritySortMode>('priority');
   const [filter, setFilter] = useState<PriorityFilterMode>('weekly');
@@ -46,7 +45,6 @@ export function PrioritiesClient() {
   });
   const [savingTask, setSavingTask] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Record<string, boolean>>({});
-  const [sendingIds, setSendingIds] = useState<Record<string, boolean>>({});
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -54,6 +52,21 @@ export function PrioritiesClient() {
     priority: 3,
     dueAt: '',
   });
+
+  const [preview, setPreview] = useState<{
+    customerId: string;
+    rule: AutoRuleKey;
+    customerName: string | null;
+    vehicleLabel: string | null;
+    plate: string | null;
+    ruleLabel: string | null;
+    contextLine: string | null;
+  } | null>(null);
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const filterDlgRef = useRef<HTMLDialogElement>(null);
+  const manualDlgRef = useRef<HTMLDialogElement>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -82,12 +95,43 @@ export function PrioritiesClient() {
     void fetchItems();
   }, [fetchItems]);
 
-  // 一定時間で message を消す
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(null), 4000);
     return () => clearTimeout(t);
   }, [message]);
+
+  useEffect(() => {
+    const el = filterDlgRef.current;
+    if (!el) return;
+    if (filterOpen) {
+      if (!el.open) el.showModal();
+    } else if (el.open) el.close();
+  }, [filterOpen]);
+
+  useEffect(() => {
+    const el = filterDlgRef.current;
+    if (!el) return;
+    const fn = () => setFilterOpen(false);
+    el.addEventListener('close', fn);
+    return () => el.removeEventListener('close', fn);
+  }, []);
+
+  useEffect(() => {
+    const el = manualDlgRef.current;
+    if (!el) return;
+    if (manualOpen) {
+      if (!el.open) el.showModal();
+    } else if (el.open) el.close();
+  }, [manualOpen]);
+
+  useEffect(() => {
+    const el = manualDlgRef.current;
+    if (!el) return;
+    const fn = () => setManualOpen(false);
+    el.addEventListener('close', fn);
+    return () => el.removeEventListener('close', fn);
+  }, []);
 
   async function createTask() {
     if (!newTask.title.trim()) return;
@@ -112,13 +156,13 @@ export function PrioritiesClient() {
     }
     setNewTask({ title: '', description: '', taskType: 'CALL', priority: 3, dueAt: '' });
     setSavingTask(false);
+    setManualOpen(false);
     await fetchItems();
   }
 
   async function completeItem(item: PriorityQueueRow) {
     setError(null);
     if (item.task_id) {
-      // MANUAL タスク：staff_tasks の status を DONE に
       setUpdatingIds((prev) => ({ ...prev, [item.queue_id]: true }));
       const res = await fetch(`/api/priorities/tasks/${item.task_id}`, {
         method: 'PATCH',
@@ -136,7 +180,6 @@ export function PrioritiesClient() {
       return;
     }
 
-    // AUTO 候補：customer_id を resolved 扱いにする
     if (!item.customer_id) {
       setError('完了登録に必要な顧客IDが不足しています。');
       return;
@@ -160,62 +203,21 @@ export function PrioritiesClient() {
     await fetchItems();
   }
 
-  function goToReviewFromQueue(item: PriorityQueueRow) {
+  function openPreviewForItem(item: PriorityQueueRow) {
     const rk = pickRuleKeyFromQueueId(item.queue_id);
     if (!item.customer_id || !rk) {
-      setError('このタスクはレビューのルールを判定できません。');
+      setError('このタスクはプレビューできません。');
       return;
     }
-    router.push(
-      buildNotificationsReviewHref({
-        customerIds: [item.customer_id],
-        rule: rk,
-        channel: 'LINE',
-      }),
-    );
-  }
-
-  async function sendLine(item: PriorityQueueRow) {
-    setError(null);
-    if (!item.customer_id) {
-      setError('LINE送信先の顧客IDが不足しています。');
-      return;
-    }
-    const ruleKey = pickRuleKeyFromQueueId(item.queue_id);
-    if (!ruleKey) {
-      setError('このタスクは LINE 送信対象ではありません（手動タスクや該当通知タイミング外）。');
-      return;
-    }
-    if (!item.line_user_id) {
-      setError('LINE未連携の顧客です。先に LINE userId を結びつけてください。');
-      return;
-    }
-    if (typeof window !== 'undefined' && !window.confirm(`${item.customer_name ?? ''}様にLINEで通知しますか？`)) {
-      return;
-    }
-    setSendingIds((prev) => ({ ...prev, [item.queue_id]: true }));
-    const res = await fetch('/api/notifications/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rule: ruleKey,
-        channel: 'LINE',
-        customer_ids: [item.customer_id],
-      }),
+    setPreview({
+      customerId: item.customer_id,
+      rule: rk,
+      customerName: item.customer_name,
+      vehicleLabel: item.vehicle_label ?? null,
+      plate: item.plate,
+      ruleLabel: ruleLabelFromQueueId(item.queue_id),
+      contextLine: ruleLabelFromQueueId(item.queue_id),
     });
-    const json = await res.json();
-    setSendingIds((prev) => ({ ...prev, [item.queue_id]: false }));
-    if (!res.ok) {
-      setError(json.error ?? 'LINE送信に失敗しました。');
-      return;
-    }
-    if ((json.failed ?? 0) > 0) {
-      const codes = json.failedByCode ? Object.keys(json.failedByCode).join(', ') : '';
-      setError(`LINE送信が一部失敗しました${codes ? `（${codes}）` : ''}。`);
-    } else {
-      setMessage('LINEを送信しました');
-    }
-    await fetchItems();
   }
 
   const openItems = useMemo(
@@ -225,42 +227,66 @@ export function PrioritiesClient() {
   const urgencyBannerCount = openItems.length;
   const opsManagerContact = process.env.NEXT_PUBLIC_OPS_MANAGER_CONTACT ?? '管理者';
 
+  const filterLabel = FILTERS.find((f) => f.id === filter)?.label ?? '';
+  const sortLabel = sort === 'priority' ? '優先度順' : '時系列';
+
   return (
     <>
-      {/* 緊急度サマリーバナー */}
-      <div className={`urgency-banner ${urgencyBannerCount === 0 ? 'calm' : urgencyBannerCount > 5 ? '' : 'warn'}`}>
+      <div
+        className={`urgency-banner urgency-banner--compact mobile-only ${
+          urgencyBannerCount === 0 ? 'calm' : urgencyBannerCount > 5 ? '' : 'warn'
+        }`}
+      >
+        <span>
+          <span className="urgency-banner-label">今週</span>{' '}
+          <span className="urgency-banner-value">{urgencyBannerCount}</span> 件
+          {summary.failedThisWeek > 0 && (
+            <>
+              {' '}
+              · 送信失敗 {summary.failedThisWeek} 件
+            </>
+          )}
+          {' '}
+          · 障害時: {opsManagerContact}
+        </span>
+      </div>
+
+      <div className={`urgency-banner ${urgencyBannerCount === 0 ? 'calm' : urgencyBannerCount > 5 ? '' : 'warn'} desktop-only`}>
         <div>
           <div className="urgency-banner-label">今週連絡が必要</div>
           <div>
             <span className="urgency-banner-value">{urgencyBannerCount}</span>
             <span style={{ marginLeft: 4, fontSize: 14 }}>件</span>
           </div>
-          {urgencyBannerCount === 0 && (
-            <div className="urgency-banner-sub">今週の連絡対象はありません</div>
-          )}
+          {urgencyBannerCount === 0 && <div className="urgency-banner-sub">今週の連絡対象はありません</div>}
         </div>
         <div style={{ textAlign: 'right', fontSize: 12 }}>
-          {summary.failedThisWeek > 0 && (
-            <div>今週の送信失敗: {summary.failedThisWeek}件</div>
-          )}
+          {summary.failedThisWeek > 0 && <div>今週の送信失敗: {summary.failedThisWeek}件</div>}
           <div>障害時連絡先: {opsManagerContact}</div>
         </div>
       </div>
 
-      {/* メッセージ・エラー表示 */}
       {message && (
         <div className="badge badge-success" style={{ display: 'block', padding: 10, marginBottom: 12 }}>
           {message}
         </div>
       )}
       {error && (
-        <div className="badge badge-danger" style={{ display: 'block', padding: 10, marginBottom: 12, whiteSpace: 'pre-line' }}>
+        <div
+          className="badge badge-danger"
+          style={{ display: 'block', padding: 10, marginBottom: 12, whiteSpace: 'pre-line' }}
+        >
           {error}
         </div>
       )}
 
-      {/* フィルタ・並び替え */}
-      <div className="page-actions" style={{ marginBottom: 16 }}>
+      <div className="priorities-toolbar mobile-only">
+        <button type="button" className="priorities-toolbar-btn" onClick={() => setFilterOpen(true)}>
+          絞り込み ▾ <span style={{ opacity: 0.75, fontWeight: 400 }}>{filterLabel} / {sortLabel}</span>
+        </button>
+      </div>
+
+      <div className="page-actions desktop-only" style={{ marginBottom: 16 }}>
         {FILTERS.map((f) => (
           <button
             key={f.id}
@@ -282,8 +308,7 @@ export function PrioritiesClient() {
         </select>
       </div>
 
-      {/* カードリスト */}
-      <section className="panel" style={{ padding: 16 }}>
+      <section className="panel priorities-panel-mobile priorities-list-section">
         {loading ? (
           <div className="empty">読み込み中...</div>
         ) : items.length === 0 ? (
@@ -296,6 +321,7 @@ export function PrioritiesClient() {
               const showCompleteButton =
                 (item.task_id != null && item.status !== 'DONE') ||
                 (item.source_type === 'AUTO' && item.customer_id != null && item.status !== 'DONE');
+              const isManualTask = item.task_id != null;
               return (
                 <CustomerActionCard
                   key={item.queue_id}
@@ -307,17 +333,11 @@ export function PrioritiesClient() {
                   plate={item.plate}
                   daysLeft={daysLeft}
                   ruleLabel={ruleLabelFromQueueId(item.queue_id)}
-                  taskId={item.task_id}
-                  showCompleteButton={showCompleteButton}
                   ruleAvailable={ruleAvailable}
-                  onLineSend={() => void sendLine(item)}
-                  onLineReview={
-                    ruleAvailable && item.customer_id
-                      ? () => goToReviewFromQueue(item)
-                      : undefined
-                  }
+                  showCompleteButton={showCompleteButton}
+                  isManualTask={isManualTask}
+                  onOpenPreview={() => openPreviewForItem(item)}
                   onComplete={() => void completeItem(item)}
-                  lineSending={Boolean(sendingIds[item.queue_id])}
                   completing={Boolean(updatingIds[item.queue_id])}
                 />
               );
@@ -326,8 +346,16 @@ export function PrioritiesClient() {
         )}
       </section>
 
-      {/* 手動タスク追加（折りたたみ） */}
-      <details className="panel" style={{ marginTop: 20, padding: 16 }}>
+      <button
+        type="button"
+        className="fab-manual-task mobile-only"
+        aria-label="手動タスクを追加"
+        onClick={() => setManualOpen(true)}
+      >
+        +
+      </button>
+
+      <details className="panel desktop-only" style={{ marginTop: 20, padding: 16 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>+ 手動タスクを追加（電話・見積など）</summary>
         <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8, marginTop: 12 }}>
           <input
@@ -352,9 +380,7 @@ export function PrioritiesClient() {
             min={1}
             max={5}
             value={newTask.priority}
-            onChange={(e) =>
-              setNewTask((prev) => ({ ...prev, priority: Number(e.target.value || 3) }))
-            }
+            onChange={(e) => setNewTask((prev) => ({ ...prev, priority: Number(e.target.value || 3) }))}
             aria-label="優先度（1〜5）"
           />
           <input
@@ -374,16 +400,142 @@ export function PrioritiesClient() {
           />
         </div>
         <div style={{ marginTop: 8 }}>
-          <button
-            className="btn btn-primary"
-            disabled={savingTask}
-            onClick={createTask}
-            type="button"
-          >
+          <button className="btn btn-primary" disabled={savingTask} onClick={() => void createTask()} type="button">
             {savingTask ? '追加中...' : 'タスク追加'}
           </button>
         </div>
       </details>
+
+      <dialog
+        ref={filterDlgRef}
+        className="preview-sheet-root"
+        onClick={(e) => {
+          if (e.target === filterDlgRef.current) filterDlgRef.current?.close();
+        }}
+      >
+        <div className="preview-sheet-panel filter-sheet-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="preview-sheet-handle" aria-hidden />
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>絞り込み</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 8 }}>表示</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {FILTERS.map((f) => (
+              <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="pf"
+                  checked={filter === f.id}
+                  onChange={() => setFilter(f.id)}
+                />
+                {f.label}
+              </label>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', margin: '16px 0 8px' }}>並び順</div>
+          <select
+            className="select"
+            style={{ width: '100%' }}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as PrioritySortMode)}
+          >
+            <option value="priority">優先度（残日数）</option>
+            <option value="timeline">時系列</option>
+          </select>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%', marginTop: 20, minHeight: 48 }}
+            onClick={() => filterDlgRef.current?.close()}
+          >
+            閉じる
+          </button>
+        </div>
+      </dialog>
+
+      <dialog
+        ref={manualDlgRef}
+        className="preview-sheet-root"
+        onClick={(e) => {
+          if (e.target === manualDlgRef.current) manualDlgRef.current?.close();
+        }}
+      >
+        <div className="preview-sheet-panel filter-sheet-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="preview-sheet-handle" aria-hidden />
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>手動タスクを追加</div>
+          <input
+            className="input"
+            style={{ width: '100%', marginBottom: 8 }}
+            placeholder="例: 田中様へ車検見積の再連絡"
+            value={newTask.title}
+            onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
+          />
+          <select
+            className="select"
+            style={{ width: '100%', marginBottom: 8 }}
+            value={newTask.taskType}
+            onChange={(e) => setNewTask((prev) => ({ ...prev, taskType: e.target.value as TaskType }))}
+          >
+            <option value="CALL">電話</option>
+            <option value="FOLLOWUP">フォロー</option>
+            <option value="QUOTE">見積</option>
+            <option value="OTHER">その他</option>
+          </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={5}
+              value={newTask.priority}
+              onChange={(e) => setNewTask((prev) => ({ ...prev, priority: Number(e.target.value || 3) }))}
+              aria-label="優先度（1〜5）"
+            />
+            <input
+              className="input"
+              type="datetime-local"
+              value={newTask.dueAt}
+              onChange={(e) => setNewTask((prev) => ({ ...prev, dueAt: e.target.value }))}
+            />
+          </div>
+          <textarea
+            className="textarea"
+            style={{ width: '100%', marginBottom: 12 }}
+            rows={2}
+            placeholder="補足メモ（任意）"
+            value={newTask.description}
+            onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
+          />
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%', minHeight: 48 }}
+            disabled={savingTask}
+            onClick={() => void createTask()}
+          >
+            {savingTask ? '追加中...' : 'タスク追加'}
+          </button>
+          <button type="button" className="preview-sheet-cancel" onClick={() => manualDlgRef.current?.close()}>
+            キャンセル
+          </button>
+        </div>
+      </dialog>
+
+      {preview && (
+        <PreviewBottomSheet
+          open
+          onClose={() => setPreview(null)}
+          customerId={preview.customerId}
+          rule={preview.rule}
+          customerName={preview.customerName}
+          vehicleLabel={preview.vehicleLabel}
+          plate={preview.plate}
+          contextLine={preview.contextLine}
+          onSent={() => {
+            setPreview(null);
+            setMessage('LINEを送信しました');
+            void fetchItems();
+          }}
+        />
+      )}
     </>
   );
 }

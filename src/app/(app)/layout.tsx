@@ -1,32 +1,11 @@
 import { TopNav } from '@/components/top-nav';
 import { TopTabs } from '@/components/top-tabs';
+import { BottomNav } from '@/components/bottom-nav';
 import { Sidebar } from '@/components/sidebar';
 import { requireStaff } from '@/lib/auth';
-import { getServerSupabase } from '@/lib/supabase/server';
+import { getNavCountEntries } from '@/lib/app-nav-counts';
 
 export const dynamic = 'force-dynamic';
-
-async function getCounts() {
-  const supabase = getServerSupabase();
-  const [s180, s90, s30, overdue, oil, priorities, lineUnmatched] = await Promise.all([
-    supabase.from('v_targets_shaken_180').select('customer_id', { count: 'exact', head: true }),
-    supabase.from('v_targets_shaken_90').select('customer_id', { count: 'exact', head: true }),
-    supabase.from('v_targets_shaken_30').select('customer_id', { count: 'exact', head: true }),
-    supabase.from('v_targets_shaken_overdue').select('customer_id', { count: 'exact', head: true }),
-    supabase.from('v_targets_oil').select('customer_id', { count: 'exact', head: true }),
-    supabase.from('v_priority_queue').select('queue_id', { count: 'exact', head: true }).in('status', ['OPEN', 'IN_PROGRESS']),
-    supabase.from('v_line_unmatched').select('line_user_id', { count: 'exact', head: true }),
-  ]);
-  return [
-    { href: '/priorities', count: priorities.count ?? 0 },
-    { href: '/lists/shaken-180', count: s180.count ?? 0 },
-    { href: '/lists/shaken-90', count: s90.count ?? 0 },
-    { href: '/lists/shaken-30', count: s30.count ?? 0 },
-    { href: '/lists/shaken-overdue', count: overdue.count ?? 0 },
-    { href: '/lists/oil', count: oil.count ?? 0 },
-    { href: '/line/unmatched', count: lineUnmatched.count ?? 0 },
-  ];
-}
 
 export default async function AppLayout({
   children,
@@ -34,15 +13,18 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const ctx = await requireStaff();
-  const counts = await getCounts();
+  const counts = await getNavCountEntries();
   return (
     <>
       <TopNav userName={ctx.profile?.name ?? ctx.email} role={ctx.profile?.role} />
-      <TopTabs counts={counts} />
+      <div className="desktop-only">
+        <TopTabs counts={counts} />
+      </div>
       <div className="app-shell">
         <Sidebar counts={counts} />
         <main className="main">{children}</main>
       </div>
+      <BottomNav counts={counts} />
     </>
   );
 }

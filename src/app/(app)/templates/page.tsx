@@ -18,7 +18,7 @@ export default async function TemplatesPage() {
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">テンプレート</h1>
@@ -46,8 +46,8 @@ export default async function TemplatesPage() {
 
       <NextActions
         items={[
-          { href: '/notifications/logs', label: '配信履歴', primary: true },
-          { href: '/priorities', label: '今日の連絡' },
+          { href: '/history', label: '送付履歴', primary: true },
+          { href: '/', label: 'ホーム' },
         ]}
       />
     </>

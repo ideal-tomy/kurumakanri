@@ -18,7 +18,7 @@ export default async function CampaignNewPage() {
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <CampaignClient rows={rows} />
     </>
   );

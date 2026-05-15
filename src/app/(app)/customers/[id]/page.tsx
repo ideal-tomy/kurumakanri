@@ -268,7 +268,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
         items={[
           { href: '/customers', label: '顧客一覧へ戻る', primary: true },
           { href: '/customers/new', label: '+ 別の顧客を追加' },
-          { href: '/priorities', label: '今日の連絡' },
+          { href: '/', label: 'ホーム' },
           { href: `/quotes/by-customer/${customer.id}`, label: 'この車両の見積を見る' },
         ]}
       />

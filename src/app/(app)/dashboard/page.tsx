@@ -88,7 +88,7 @@ export default async function DashboardPage() {
           <div className="page-sub">週次運用: 担当1名 + バックアップ1名 / 障害時連絡先: {managerContact}</div>
         </div>
         <div className="page-actions">
-          <Link href="/priorities" className="btn">
+          <Link href="/" className="btn">
             優先を開く
           </Link>
           <Link href="/customers/new" className="btn btn-primary">
@@ -237,7 +237,7 @@ export default async function DashboardPage() {
         <section className="panel">
           <header className="panel-header">
             <div className="panel-title">直近の配信履歴</div>
-            <Link href="/notifications/logs" className="panel-link">
+            <Link href="/history" className="panel-link">
               すべて見る →
             </Link>
           </header>
@@ -322,11 +322,11 @@ export default async function DashboardPage() {
 
       <NextActions
         items={[
-          { href: '/priorities', label: '今日の連絡を見る', primary: true },
+          { href: '/', label: 'ホーム（通知リスト）', primary: true },
           { href: '/customers', label: '顧客一覧' },
           { href: '/customers/new', label: '+ 顧客を追加' },
           { href: '/line/unmatched', label: 'LINE未マッチ' },
-          { href: '/notifications/logs', label: '配信履歴' },
+          { href: '/history', label: '送付履歴' },
         ]}
       />
     </>

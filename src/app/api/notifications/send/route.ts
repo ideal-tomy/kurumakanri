@@ -18,6 +18,10 @@ const Body = z.object({
   customer_ids: z.array(z.string().uuid()).min(1),
   template_key: z.string().optional(),
   fallback: z.boolean().optional(),
+  /** LINE 送信時にテンプレートの代わりに使う本文 */
+  line_body: z.string().optional(),
+  /** メール送信時にテンプレートの代わりに使う本文 */
+  mail_body: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -39,6 +43,10 @@ export async function POST(req: Request) {
   for (const customerId of parsed.data.customer_ids) {
     for (const channel of channels) {
       queued += 1;
+      const lineBody = parsed.data.line_body?.trim();
+      const mailBody = parsed.data.mail_body?.trim();
+      const contentOverride =
+        channel === 'LINE' && lineBody ? lineBody : channel === 'MAIL' && mailBody ? mailBody : undefined;
       const result = await dispatchNotification({
         customerId,
         channel,
@@ -46,6 +54,7 @@ export async function POST(req: Request) {
         templateKey,
         requestedBy: ctx.userId,
         fallback: parsed.data.fallback ?? true,
+        contentOverride,
       });
       results.push(result);
       if (result.status === 'SENT') sent += 1;

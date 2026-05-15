@@ -5,7 +5,6 @@ import { PageBack } from '@/components/page-back';
 import { NextActions } from '@/components/next-actions';
 import { formatDate, formatDateTime, formatKm, formatYen, priorityLabel } from '@/lib/format';
 import type { CustomerOverviewRow } from '@/lib/supabase/types';
-import { getUrgencyLevel } from '@/lib/urgency';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,17 +49,57 @@ async function loadCustomers(params: SearchParams): Promise<CustomerOverviewRow[
   return (data ?? []) as CustomerOverviewRow[];
 }
 
+async function loadMonthlyNotifyStats(): Promise<{ sent: number; failed: number }> {
+  const supabase = getServerSupabase();
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  monthStart.setHours(0, 0, 0, 0);
+  const iso = monthStart.toISOString();
+  const [ok, bad] = await Promise.all([
+    supabase
+      .from('notification_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('result', 'SUCCESS')
+      .gte('sent_at', iso),
+    supabase
+      .from('notification_logs')
+      .select('id', { count: 'exact', head: true })
+      .in('result', ['FAILED', 'BOUNCED', 'COMPLAINED'])
+      .gte('sent_at', iso),
+  ]);
+  return { sent: ok.count ?? 0, failed: bad.count ?? 0 };
+}
+
+function firstChar(name: string | null | undefined): string {
+  if (!name?.trim()) return '?';
+  return name.trim().slice(0, 1);
+}
+
+function contactPill(row: CustomerOverviewRow): { text: string; level: 'critical' | 'warning' | 'normal' } {
+  const days = row.days_until_inspection;
+  const rule = row.next_notification_rule ?? '次回連絡';
+  const due = row.next_notification_due_at ?? row.inspection_expire_date;
+  const datePart = due ? formatDate(due) : '';
+  const text = `${rule}${datePart ? ` ${datePart}` : ''}`.trim();
+  if (days != null && days < 0) return { text: '期限切れフォロー', level: 'critical' };
+  if (days != null && days <= 30) return { text: text || '緊急', level: 'critical' };
+  if (days != null && days <= 90) return { text: text || '近接', level: 'warning' };
+  return { text: text || '—', level: 'normal' };
+}
+
 export default async function CustomersPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const customers = await loadCustomers(searchParams);
+  const [customers, stats] = await Promise.all([loadCustomers(searchParams), loadMonthlyNotifyStats()]);
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
-      <div className="page-header">
+      <div className="desktop-only">
+        <PageBack href="/" label="ホームへ戻る" />
+      </div>
+
+      <div className="page-header mobile-page-header-hide">
         <div>
           <h1 className="page-title">顧客一覧</h1>
           <div className="page-sub">登録顧客と車両の一覧</div>
@@ -72,8 +111,18 @@ export default async function CustomersPage({
         </div>
       </div>
 
+      <div className="customers-mobile-stats mobile-only">
+        <Link href="/dashboard" className="customers-stats-chip">
+          今月送付 {stats.sent}件 / 失敗 {stats.failed}件 · 経営サマリ →
+        </Link>
+      </div>
+
+      <div className="mobile-only" style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>顧客 {customers.length} 件</div>
+      </div>
+
       <section className="panel">
-        <form method="GET" className="filter-bar">
+        <form method="GET" className="filter-bar desktop-only">
           <input
             className="input"
             style={{ maxWidth: 280 }}
@@ -96,7 +145,6 @@ export default async function CustomersPage({
           </button>
         </form>
 
-        {/* PC: テーブル表示 */}
         <div className="table-wrap desktop-only">
           <table>
             <thead>
@@ -192,67 +240,27 @@ export default async function CustomersPage({
           </table>
         </div>
 
-        {/* モバイル: カードリスト表示 */}
-        <ul className="list-card-list mobile-only">
+        <ul className="customers-compact-list mobile-only">
           {customers.length === 0 ? (
             <li className="empty" style={{ padding: 16 }}>
               該当する顧客がありません
             </li>
           ) : (
             customers.map((row) => {
-              const urgency = getUrgencyLevel(row.days_until_inspection ?? null);
+              const pill = contactPill(row);
+              const sub = row.vehicle_id
+                ? `${row.maker ?? ''} ${row.model ?? ''} ${row.plate ?? ''}`.trim()
+                : '車両未登録';
               return (
-                <li
-                  key={`${row.customer_id}-${row.vehicle_id ?? 'none'}`}
-                  className={`list-card ${urgency}`}
-                >
-                  <div className="list-card-row">
-                    <div className="list-card-main">
-                      <Link href={`/customers/${row.customer_id}`} className="list-card-name">
-                        {row.name}
-                      </Link>
-                      <div className="list-card-meta">{row.phone ?? '電話番号未登録'}</div>
-                      {row.vehicle_id ? (
-                        <div className="list-card-vehicle">
-                          <span>
-                            {row.maker} {row.model}
-                          </span>
-                          {row.plate && <span className="plate">{row.plate}</span>}
-                        </div>
-                      ) : (
-                        <div className="list-card-meta">車両未登録</div>
-                      )}
-                      <div className="list-card-meta" style={{ marginTop: 6 }}>
-                        次: {row.next_notification_rule ?? '—'}{' '}
-                        {row.next_notification_due_at || row.inspection_expire_date
-                          ? `(${formatDate(row.next_notification_due_at ?? row.inspection_expire_date)})`
-                          : ''}{' '}
-                        / 最終LINE: {row.last_line_sent_at ? formatDateTime(row.last_line_sent_at) : '—'} / 見積:{' '}
-                        {row.latest_quote_grand_total != null ? formatYen(row.latest_quote_grand_total) : '—'}
-                      </div>
+                <li key={`${row.customer_id}-${row.vehicle_id ?? 'none'}`} style={{ listStyle: 'none' }}>
+                  <Link href={`/customers/${row.customer_id}`} className="customers-compact-row">
+                    <div className="customers-compact-avatar">{firstChar(row.name)}</div>
+                    <div className="customers-compact-main">
+                      <div className="customers-compact-name">{row.name ?? '（無名）'} 様</div>
+                      <div className="customers-compact-sub">{sub}</div>
                     </div>
-                    <div className="list-card-side">
-                      <div className={`list-card-days ${urgency}`}>
-                        {priorityLabel(row.days_until_inspection)}
-                      </div>
-                      <div className="list-card-days-sub">
-                        {formatDate(row.inspection_expire_date) || '満了日未設定'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="list-card-actions">
-                    <Badge variant={priorityVariant(row.days_until_inspection)}>
-                      {priorityVariant(row.days_until_inspection) === 'danger'
-                        ? '緊急'
-                        : priorityVariant(row.days_until_inspection) === 'warn'
-                          ? '近接'
-                          : '余裕'}
-                    </Badge>
-                    <span className="list-card-meta">推定走行 {formatKm(row.estimated_mileage)}</span>
-                    <Link className="btn btn-sm list-card-cta" href={`/customers/${row.customer_id}`}>
-                      詳細
-                    </Link>
-                  </div>
+                    <div className={`customers-compact-pill ${pill.level}`}>{pill.text}</div>
+                  </Link>
                 </li>
               );
             })
@@ -260,13 +268,19 @@ export default async function CustomersPage({
         </ul>
       </section>
 
-      <NextActions
-        items={[
-          { href: '/customers/new', label: '+ 顧客を追加', primary: true },
-          { href: '/priorities', label: '今日の連絡' },
-          { href: '/line/unmatched', label: 'LINE未マッチ' },
-        ]}
-      />
+      <Link href="/customers/new" className="customers-fab mobile-only" aria-label="顧客を追加" title="顧客を追加">
+        +
+      </Link>
+
+      <div className="desktop-only">
+        <NextActions
+          items={[
+            { href: '/customers/new', label: '+ 顧客を追加', primary: true },
+            { href: '/', label: 'ホーム' },
+            { href: '/line/unmatched', label: 'LINE未マッチ' },
+          ]}
+        />
+      </div>
     </>
   );
 }

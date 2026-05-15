@@ -142,6 +142,10 @@ export async function dispatchNotification(args: {
   templateKey: string;
   requestedBy: string | null;
   fallback?: boolean;
+  /** テンプレートを使わずに送る本文（LINE の text / メール body） */
+  contentOverride?: string;
+  /** メール件名の上書き（未指定時はテンプレから生成） */
+  subjectOverride?: string | null;
 }): Promise<DispatchResult> {
   const supabase = getServerSupabase();
   const service = getServiceSupabase();
@@ -195,8 +199,16 @@ export async function dispatchNotification(args: {
     ruleKey: args.ruleKey,
     channel: args.channel,
   });
-  const content = renderTemplate(template.content, vars);
-  const subject = template.subject ? renderTemplate(template.subject, vars) : null;
+  const content =
+    args.contentOverride != null && args.contentOverride !== ''
+      ? args.contentOverride
+      : renderTemplate(template.content, vars);
+  const subject =
+    args.subjectOverride != null
+      ? args.subjectOverride
+      : template.subject
+        ? renderTemplate(template.subject, vars)
+        : null;
 
   const idempotencyKey = buildIdempotencyKey({
     customerId: args.customerId,

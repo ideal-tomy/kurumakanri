@@ -20,7 +20,7 @@ export default async function StatutoryAdminPage() {
 
   return (
     <>
-      <PageBack href="/priorities" label="今日の連絡へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">法定費用マスタ</h1>
@@ -35,7 +35,7 @@ export default async function StatutoryAdminPage() {
       <NextActions
         items={[
           { href: '/templates', label: 'テンプレート', primary: true },
-          { href: '/priorities', label: '今日の連絡' },
+          { href: '/', label: 'ホーム' },
         ]}
       />
     </>

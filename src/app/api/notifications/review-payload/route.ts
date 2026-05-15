@@ -122,9 +122,8 @@ export async function POST(req: Request) {
 
     const isOilRule = parsed.data.rule === 'oil_4000km';
     const varsForQuoteLink = await buildMessageVariables(overview, { channel: wantLine ? 'LINE' : 'MAIL' });
-    // 車検通知時のみ「お見積リンク」をプレビューに出す。
-    // オイル通知は別軸（オイル一覧URL）に切り替わったため非表示。
-    const quoteLinkPreview = isOilRule ? null : varsForQuoteLink.quoteUrl ?? null;
+    /** 顧客が開く公開見積URL（オイル時も同じ変数で付与される場合あり） */
+    const quoteLinkPreview = varsForQuoteLink.quoteUrl ?? null;
 
     let quoteBlock: {
       id: string;

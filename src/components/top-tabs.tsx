@@ -9,10 +9,10 @@ interface NavCount {
 }
 
 const TABS: Array<{ href: string; label: string }> = [
-  { href: '/priorities', label: '今日の連絡' },
+  { href: '/', label: 'ホーム' },
   { href: '/customers', label: '顧客' },
   { href: '/line/unmatched', label: 'LINE未マッチ' },
-  { href: '/notifications/logs', label: '配信履歴' },
+  { href: '/history', label: '送付履歴' },
 ];
 
 export function TopTabs({ counts }: { counts?: NavCount[] }) {
@@ -26,7 +26,10 @@ export function TopTabs({ counts }: { counts?: NavCount[] }) {
     <nav className="top-tabs" aria-label="主要メニュー">
       <div className="top-tabs-inner">
         {TABS.map((t) => {
-          const active = pathname === t.href || pathname?.startsWith(`${t.href}/`);
+          const active =
+            t.href === '/'
+              ? pathname === '/' || pathname === ''
+              : pathname === t.href || pathname?.startsWith(`${t.href}/`);
           const count = countFor(t.href);
           return (
             <Link

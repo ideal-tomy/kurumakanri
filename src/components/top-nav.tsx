@@ -10,15 +10,15 @@ export function TopNav({
 }) {
   return (
     <header className="top-nav">
-      <Link href="/dashboard" className="brand">
+      <Link href="/" className="brand">
         <div className="brand-mark">S</div>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="brand-text-full">
           <span className="brand-name">Shaken Notify</span>
           <span className="brand-sub">v1.0</span>
         </div>
       </Link>
 
-      <div className="top-nav-right">
+      <div className="top-nav-right desktop-only">
         {userName && (
           <span className="user-info">
             {userName}
@@ -26,6 +26,9 @@ export function TopNav({
           </span>
         )}
         <LogoutButton />
+      </div>
+      <div className="top-nav-right mobile-only">
+        <LogoutButton className="btn btn-sm btn-nav-compact" />
       </div>
     </header>
   );

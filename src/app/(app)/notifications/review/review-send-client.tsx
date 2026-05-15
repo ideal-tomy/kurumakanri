@@ -202,7 +202,7 @@ function ReviewSendClientInner() {
       toast.show(
         `投入 ${json.queued ?? 0} / 送信成功 ${json.sent ?? 0} / 失敗 ${json.failed ?? 0}`,
       );
-      router.push('/notifications/logs');
+      router.push('/history');
     } catch (e) {
       toast.show(`送信失敗: ${(e as Error).message}`);
     } finally {
@@ -233,7 +233,7 @@ function ReviewSendClientInner() {
         </p>
         <NextActions
           items={[
-            { href: '/priorities', label: '優先一覧へ', primary: true },
+            { href: '/', label: 'ホームへ', primary: true },
             { href: '/lists/shaken-180', label: '車検半年前リスト' },
             { href: '/lists/shaken-90', label: '車検3か月前リスト' },
           ]}
@@ -255,7 +255,7 @@ function ReviewSendClientInner() {
         </p>
         <NextActions
           items={[
-            { href: '/priorities', label: '優先一覧へ', primary: true },
+            { href: '/', label: 'ホームへ', primary: true },
             { href: '/lists/shaken-180', label: '車検半年前リスト' },
             { href: '/lists/shaken-90', label: '車検3か月前リスト' },
           ]}
@@ -268,7 +268,7 @@ function ReviewSendClientInner() {
 
   return (
     <>
-      <PageBack href="/priorities" label="優先へ戻る" />
+      <PageBack href="/" label="ホームへ戻る" />
       <div className="page-header">
         <div>
           <h1 className="page-title">送信レビュー</h1>
