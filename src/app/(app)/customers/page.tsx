@@ -121,6 +121,35 @@ export default async function CustomersPage({
         <div style={{ fontSize: 18, fontWeight: 700 }}>顧客 {customers.length} 件</div>
       </div>
 
+      <nav className="customers-filter-chips mobile-only" aria-label="表示の絞り込み">
+        {[
+          { filter: '', label: 'すべて' },
+          { filter: '90', label: '90日以内' },
+          { filter: '180', label: '180日以内' },
+          { filter: 'expired', label: '期限切れ' },
+          { filter: 'no_line', label: 'LINE未連携' },
+          { filter: 'stale_line', label: 'LINE久々' },
+          { filter: 'no_quote', label: '見積なし' },
+        ].map((c) => {
+          const href = (() => {
+            const sp = new URLSearchParams();
+            if (searchParams.q) sp.set('q', searchParams.q);
+            if (c.filter) sp.set('filter', c.filter);
+            const q = sp.toString();
+            return q ? `/customers?${q}` : '/customers';
+          })();
+          const active =
+            c.filter === ''
+              ? !searchParams.filter
+              : searchParams.filter === c.filter;
+          return (
+            <Link key={c.filter || 'all'} href={href} className={`customers-filter-chip ${active ? 'active' : ''}`}>
+              {c.label}
+            </Link>
+          );
+        })}
+      </nav>
+
       <section className="panel">
         <form method="GET" className="filter-bar desktop-only">
           <input

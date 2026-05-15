@@ -19,7 +19,7 @@ export default async function HomeHubPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">通知リスト</h1>
-          <div className="page-sub">送付する相手を選んで、送付確認へ進みます</div>
+          <div className="page-sub home-hub-page-sub">送付する相手を選んで、送付確認へ進みます</div>
         </div>
       </div>
       <section className="panel home-hub-panel">

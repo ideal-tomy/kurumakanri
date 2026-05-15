@@ -155,7 +155,7 @@ export function LogsTable({
 
       <div className="logs-mobile-intro mobile-only">
         <p className="logs-mobile-intro-text">
-          <strong>送付履歴</strong>です。失敗した行を<strong>再送</strong>できます。新しく送る場合はホームの通知リストを開いてください。
+          失敗行は<strong>再送</strong>できます。新規送付はホームの通知リストから。
         </p>
         <Link href={homeHref} className="btn btn-primary logs-mobile-cta">
           ホーム（通知リスト）へ
