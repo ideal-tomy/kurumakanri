@@ -2,10 +2,8 @@ import { notFound } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { PageBack } from '@/components/page-back';
 import { NextActions } from '@/components/next-actions';
-import { formatDate } from '@/lib/format';
 import type { QuoteRow, VehicleRow } from '@/lib/supabase/types';
-import { GenerateButton } from './generate-button';
-import { QuoteEditorCard } from '@/components/quote-line-editor';
+import { QuotePageClient } from './quote-page-client';
 import { buildQuoteShareToken, isQuoteShareConfigured } from '@/lib/quote-share';
 
 export const dynamic = 'force-dynamic';
@@ -57,58 +55,35 @@ export default async function QuoteListPage({
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
   const canShareQuote = Boolean(siteUrl && isQuoteShareConfigured());
-
   const fromNotify = searchParams?.notify === '1';
+
+  const shareUrlsByQuoteId: Record<string, string | null> = {};
+  for (const q of quotes) {
+    shareUrlsByQuoteId[q.id] =
+      canShareQuote && siteUrl ? `${siteUrl}/q/${buildQuoteShareToken(q.id)}` : null;
+  }
 
   return (
     <>
-      <PageBack
-        href={`/customers/${vehicle.customer_id}`}
-        label="顧客詳細へ戻る"
+      <PageBack href={`/customers/${vehicle.customer_id}`} label="顧客詳細へ戻る" />
+
+      <QuotePageClient
+        vehicle={vehicle}
+        quotes={quotes}
+        shareUrlsByQuoteId={shareUrlsByQuoteId}
+        lineNotifyEligible={lineNotifyEligible}
+        fromNotify={fromNotify}
       />
-      {fromNotify && (
-        <div className="badge badge-warn" style={{ marginBottom: 12, padding: 12, display: 'block', fontSize: 14 }}>
-          送付確認から開いています。明細を保存したら、<strong>送付確認のタブ</strong>に戻り「金額・本文を再取得」を押してから LINE で送付してください。
-        </div>
-      )}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">
-            見積 - {vehicle.maker} {vehicle.model}
-          </h1>
-          <div className="page-sub">
-            ナンバー {vehicle.plate} ・ 満了日 {formatDate(vehicle.inspection_expire_date)}
-          </div>
-        </div>
-        <div className="page-actions">
-          <GenerateButton vehicleId={vehicle.id} />
-        </div>
+
+      <div className="desktop-only">
+        <NextActions
+          items={[
+            { href: `/customers/${vehicle.customer_id}`, label: '顧客詳細へ戻る', primary: true },
+            { href: '/customers', label: '顧客一覧' },
+            { href: '/', label: 'ホーム' },
+          ]}
+        />
       </div>
-
-      {quotes.length === 0 ? (
-        <div className="empty">まだ見積がありません。「自動見積を生成」を押してください。</div>
-      ) : (
-        quotes.map((q) => (
-          <QuoteEditorCard
-            key={`${q.id}-${q.updated_at ?? ''}`}
-            quote={q}
-            vehicleId={vehicle.id}
-            customerId={vehicle.customer_id}
-            shareUrl={
-              canShareQuote && siteUrl ? `${siteUrl}/q/${buildQuoteShareToken(q.id)}` : null
-            }
-            lineNotifyEligible={lineNotifyEligible}
-          />
-        ))
-      )}
-
-      <NextActions
-        items={[
-          { href: `/customers/${vehicle.customer_id}`, label: '顧客詳細へ戻る', primary: true },
-          { href: '/customers', label: '顧客一覧' },
-          { href: '/', label: 'ホーム' },
-        ]}
-      />
     </>
   );
 }

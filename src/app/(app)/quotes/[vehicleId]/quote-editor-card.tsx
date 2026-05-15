@@ -2,70 +2,24 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/badge';
+import { QuoteLineEditSheet } from '@/components/quote-line-edit-sheet';
+import { QuoteLineListMobile } from '@/components/quote-line-list-mobile';
+import { QuoteMobileSummary } from '@/components/quote-mobile-summary';
+import { QuoteSaveBar } from '@/components/quote-save-bar';
+import { useToast } from '@/components/toast';
 import { formatDate, formatYen } from '@/lib/format';
 import {
-  quoteTotalsForDisplay,
-  rowsFromStoredJson,
-  type QuoteLineItem,
-} from '@/lib/quote';
+  type EditableLine,
+  newLine,
+  serializeEditorState,
+  toEditable,
+  toPayload,
+} from '@/lib/quote-editor-utils';
+import { quoteTotalsFromLinePayloads } from '@/lib/quote';
 import type { QuoteRow } from '@/lib/supabase/types';
 import { QuoteStaffActions } from './quote-staff-actions';
-
-type EditableLine = {
-  id: string;
-  label: string;
-  quantity: number;
-  unit_price: number;
-  tax_treatment: 'NON_TAXABLE' | 'TAXABLE_10';
-  category: 'legal' | 'service' | 'discount';
-};
-
-function toEditable(json: unknown, prefix: string): EditableLine[] {
-  const rows = rowsFromStoredJson(json);
-  return rows.map((r, i) => ({
-    id: `${prefix}-${i}-${r.label}`,
-    label: r.label,
-    quantity: r.quantity,
-    unit_price: r.unit_price,
-    tax_treatment: r.tax_treatment,
-    category:
-      r.category === 'discount'
-        ? 'discount'
-        : r.category === 'legal' || r.tax_treatment === 'NON_TAXABLE'
-          ? 'legal'
-          : 'service',
-  }));
-}
-
-function toPayload(lines: EditableLine[]): QuoteLineItem[] {
-  return lines.map((l) => {
-    const amount = Math.round(l.quantity * l.unit_price);
-    return {
-      label: l.label,
-      quantity: l.quantity,
-      unit_price: l.unit_price,
-      amount,
-      tax_treatment: l.tax_treatment,
-      category: l.category,
-    };
-  });
-}
-
-function newLine(category: 'legal' | 'service' | 'discount'): EditableLine {
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `row-${Date.now()}-${Math.random()}`;
-  if (category === 'legal') {
-    return { id, label: '', quantity: 1, unit_price: 0, tax_treatment: 'NON_TAXABLE', category: 'legal' };
-  }
-  if (category === 'discount') {
-    return { id, label: '値引き', quantity: 1, unit_price: -1000, tax_treatment: 'TAXABLE_10', category: 'discount' };
-  }
-  return { id, label: '', quantity: 1, unit_price: 0, tax_treatment: 'TAXABLE_10', category: 'service' };
-}
 
 export function QuoteEditorCard({
   quote: initialQuote,
@@ -73,14 +27,26 @@ export function QuoteEditorCard({
   customerId,
   shareUrl,
   lineNotifyEligible,
+  showMobileSaveBar = true,
+  onDirtyChange,
+  onSaved,
+  embedded = false,
 }: {
   quote: QuoteRow;
   vehicleId: string;
   customerId: string;
   shareUrl: string | null;
   lineNotifyEligible: boolean;
+  /** 複数見積時、固定保存バーを出すカードだけ true */
+  showMobileSaveBar?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+  /** 保存成功時（シート内編集など） */
+  onSaved?: () => void;
+  /** true のとき router.refresh しない（親がデータ再取得） */
+  embedded?: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const editable = initialQuote.status === 'DRAFT' || initialQuote.status === 'ISSUED';
 
   const [legalLines, setLegalLines] = useState<EditableLine[]>(() => toEditable(initialQuote.legal_items, 'leg'));
@@ -90,32 +56,56 @@ export function QuoteEditorCard({
   const [notes, setNotes] = useState(initialQuote.notes ?? '');
   const [status, setStatus] = useState(initialQuote.status);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+
+  const [editingLine, setEditingLine] = useState<{ which: 'legal' | 'service'; line: EditableLine } | null>(null);
+
+  const savedSnapshot = useRef(
+    serializeEditorState(
+      toEditable(initialQuote.legal_items, 'leg'),
+      toEditable(initialQuote.service_items, 'svc'),
+      initialQuote.notes ?? '',
+      initialQuote.status,
+    ),
+  );
 
   const disp = useMemo(() => {
-    const legal = toPayload(legalLines);
-    const service = toPayload(serviceLines);
-    return quoteTotalsForDisplay({
-      legal_items: legal,
-      service_items: service,
-      taxable_subtotal_ex_tax: null,
-      tax_amount_10: null,
-      non_taxable_subtotal: null,
-      grand_total: null,
-      total_amount: 0,
-    });
+    const legal = toPayload(legalLines).map((l) => ({
+      ...l,
+      category: 'legal' as const,
+      tax_treatment: 'NON_TAXABLE' as const,
+    }));
+    const service = toPayload(serviceLines).map((l) => ({
+      ...l,
+      category: (l.category === 'discount' ? 'discount' : 'service') as 'service' | 'discount',
+      tax_treatment: 'TAXABLE_10' as const,
+    }));
+    return quoteTotalsFromLinePayloads(legal, service);
   }, [legalLines, serviceLines]);
+
+  const isDirty = useMemo(() => {
+    if (!editable) return false;
+    return (
+      serializeEditorState(legalLines, serviceLines, notes, status) !== savedSnapshot.current
+    );
+  }, [editable, legalLines, serviceLines, notes, status]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!isDirty || !editable) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty, editable]);
 
   const patchLine = useCallback(
     (which: 'legal' | 'service', id: string, patch: Partial<EditableLine>) => {
       const set = which === 'legal' ? setLegalLines : setServiceLines;
-      set((prev) =>
-        prev.map((row) => {
-          if (row.id !== id) return row;
-          const next = { ...row, ...patch };
-          return next;
-        }),
-      );
+      set((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
     },
     [],
   );
@@ -125,9 +115,8 @@ export function QuoteEditorCard({
     set((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  async function save() {
+  const save = useCallback(async () => {
     setSaving(true);
-    setMsg(null);
     try {
       const legal = toPayload(legalLines).map((l) => ({
         ...l,
@@ -151,25 +140,23 @@ export function QuoteEditorCard({
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setMsg(json.error ?? `保存に失敗しました (${res.status})`);
+        toast.show(json.error ?? `保存に失敗しました (${res.status})`);
         return;
       }
-      setMsg('保存しました');
-      router.refresh();
+      savedSnapshot.current = serializeEditorState(legalLines, serviceLines, notes, status);
+      toast.show('保存しました');
+      onSaved?.();
+      if (!embedded) router.refresh();
     } catch (e) {
-      setMsg((e as Error).message);
+      toast.show((e as Error).message);
     } finally {
       setSaving(false);
     }
-  }
+  }, [initialQuote.id, legalLines, serviceLines, notes, status, router, toast, onSaved, embedded]);
 
-  function renderTable(
-    which: 'legal' | 'service',
-    lines: EditableLine[],
-    title: string,
-  ) {
+  function renderDesktopTable(which: 'legal' | 'service', lines: EditableLine[], title: string) {
     return (
-      <>
+      <div className="desktop-only">
         <h3 className="quote-section-label" style={{ marginTop: which === 'service' ? 16 : 0 }}>
           {title}
         </h3>
@@ -289,73 +276,160 @@ export function QuoteEditorCard({
               + 行を追加
             </button>
             {which === 'service' ? (
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => setServiceLines((p) => [...p, newLine('discount')])}
-              >
+              <button type="button" className="btn btn-sm" onClick={() => setServiceLines((p) => [...p, newLine('discount')])}>
                 + 値引き行
               </button>
             ) : null}
           </div>
         ) : null}
-      </>
+      </div>
     );
   }
 
+  function renderMobileLineSection(which: 'legal' | 'service', lines: EditableLine[], title: string, defaultOpen: boolean) {
+    const count = lines.length;
+    return (
+      <details className="panel accordion-details mobile-only" open={defaultOpen}>
+        <summary className="accordion-summary">
+          <span className="accordion-summary-title">
+            {title}（{count}）
+          </span>
+        </summary>
+        <div style={{ padding: '0 12px 16px' }}>
+          <QuoteLineListMobile
+            which={which}
+            lines={lines}
+            editable={editable}
+            onLineTap={(line) => setEditingLine({ which, line })}
+            onAddLine={() => {
+              const add = newLine(which === 'legal' ? 'legal' : 'service');
+              if (which === 'legal') setLegalLines((p) => [...p, add]);
+              else setServiceLines((p) => [...p, add]);
+            }}
+            onAddDiscount={
+              which === 'service' ? () => setServiceLines((p) => [...p, newLine('discount')]) : undefined
+            }
+          />
+        </div>
+      </details>
+    );
+  }
+
+  function renderTaxBreakdown(className?: string) {
+    return (
+      <table className={className} style={{ width: '100%', maxWidth: 400, marginLeft: className ? undefined : 'auto', fontSize: 13 }}>
+        <tbody>
+          <tr>
+            <td>対象外小計（法定）</td>
+            <td style={{ textAlign: 'right' }}>{formatYen(disp.non_taxable_subtotal)}</td>
+          </tr>
+          <tr>
+            <td>10%対象・税込累計（作業等）</td>
+            <td style={{ textAlign: 'right' }}>{formatYen(disp.taxable_tax_included)}</td>
+          </tr>
+          <tr>
+            <td style={{ paddingLeft: 12, color: 'var(--ink-2)' }}>内・税抜相当</td>
+            <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>{formatYen(disp.taxable_subtotal_ex_tax)}</td>
+          </tr>
+          <tr>
+            <td>消費税（10%）</td>
+            <td style={{ textAlign: 'right' }}>{formatYen(disp.tax_amount_10)}</td>
+          </tr>
+          <tr style={{ fontWeight: 700, fontSize: 15 }}>
+            <td>合計（税込）</td>
+            <td style={{ textAlign: 'right' }}>{formatYen(disp.grand_total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  const statusField = editable ? (
+    <div className="form-field">
+      <label className="form-label">ステータス</label>
+      <select
+        className="select"
+        style={{ maxWidth: 200 }}
+        value={status}
+        onChange={(e) => setStatus(e.target.value as QuoteRow['status'])}
+      >
+        <option value="DRAFT">下書き</option>
+        <option value="ISSUED">発行済み</option>
+      </select>
+    </div>
+  ) : null;
+
   return (
-    <section className="panel" style={{ marginBottom: 24 }}>
-      <header className="panel-header">
+    <section className="panel quote-editor-card" style={{ marginBottom: 24 }}>
+      <QuoteMobileSummary
+        quoteNo={initialQuote.quote_no}
+        status={status}
+        legalSubtotal={disp.non_taxable_subtotal}
+        serviceTaxIncluded={disp.taxable_tax_included}
+        grandTotal={disp.grand_total}
+        isDirty={isDirty}
+      />
+
+      <header className="panel-header quote-editor-header-desktop">
         <div>
           <div className="panel-title">{initialQuote.quote_no ?? '-'}</div>
-          <div className="cust-meta">発行 {formatDate(initialQuote.issued_at)} / 有効 {formatDate(initialQuote.valid_until)}</div>
-        </div>
-        <Badge variant="info">{status}</Badge>
-      </header>
-      <div style={{ padding: 20 }}>
-        {editable ? (
-          <div className="form-field" style={{ marginBottom: 16 }}>
-            <label className="form-label">ステータス</label>
-            <select className="select" style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value as QuoteRow['status'])}>
-              <option value="DRAFT">下書き</option>
-              <option value="ISSUED">発行済み</option>
-            </select>
+          <div className="cust-meta desktop-only">
+            発行 {formatDate(initialQuote.issued_at)} / 有効 {formatDate(initialQuote.valid_until)}
           </div>
+        </div>
+        <span className="desktop-only">
+          <Badge variant="info">{status}</Badge>
+        </span>
+      </header>
+
+      <div className="quote-editor-body" style={{ padding: 20 }}>
+        {editable ? (
+          <>
+            <div className="desktop-only" style={{ marginBottom: 16 }}>
+              {statusField}
+            </div>
+            <details className="accordion-details mobile-only" style={{ marginBottom: 10 }}>
+              <summary className="accordion-summary">
+                <span className="accordion-summary-title">見積設定</span>
+              </summary>
+              <div style={{ padding: '12px 16px 16px' }}>{statusField}</div>
+            </details>
+          </>
         ) : null}
 
-        {renderTable('legal', legalLines, '車検法定費用・手数料（対象外）')}
-        {renderTable('service', serviceLines, '作業工賃（税込み表示）・値引き')}
+        {renderDesktopTable('legal', legalLines, '車検法定費用・手数料（対象外）')}
+        {renderDesktopTable('service', serviceLines, '作業工賃（税込み表示）・値引き')}
 
-        <div style={{ marginTop: 16, fontSize: 13, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <table style={{ width: '100%', maxWidth: 400, marginLeft: 'auto' }}>
-            <tbody>
-              <tr>
-                <td>対象外小計（法定）</td>
-                <td style={{ textAlign: 'right' }}>{formatYen(disp.non_taxable_subtotal)}</td>
-              </tr>
-              <tr>
-                <td>10%対象・税込累計（作業等）</td>
-                <td style={{ textAlign: 'right' }}>{formatYen(disp.taxable_tax_included)}</td>
-              </tr>
-              <tr>
-                <td style={{ paddingLeft: 12, color: 'var(--ink-2)' }}>内・税抜相当</td>
-                <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>
-                  {formatYen(disp.taxable_subtotal_ex_tax)}
-                </td>
-              </tr>
-              <tr>
-                <td>消費税（10%）</td>
-                <td style={{ textAlign: 'right' }}>{formatYen(disp.tax_amount_10)}</td>
-              </tr>
-              <tr style={{ fontWeight: 700, fontSize: 15 }}>
-                <td>合計（税込）</td>
-                <td style={{ textAlign: 'right' }}>{formatYen(disp.grand_total)}</td>
-              </tr>
-            </tbody>
-          </table>
+        {renderMobileLineSection('legal', legalLines, '車検法定費用', false)}
+        {renderMobileLineSection('service', serviceLines, '作業・値引き', true)}
+
+        <div className="desktop-only" style={{ marginTop: 16, fontSize: 13, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          {renderTaxBreakdown()}
         </div>
 
-        <div className="form-field" style={{ marginTop: 16 }}>
+        <details className="accordion-details mobile-only" style={{ marginTop: 10 }}>
+          <summary className="accordion-summary">
+            <span className="accordion-summary-title">税の内訳</span>
+          </summary>
+          <div style={{ padding: '12px 16px 16px' }}>{renderTaxBreakdown('quote-tax-table-mobile')}</div>
+        </details>
+
+        <details className="accordion-details mobile-only" style={{ marginTop: 10 }}>
+          <summary className="accordion-summary">
+            <span className="accordion-summary-title">備考</span>
+          </summary>
+          <div style={{ padding: '12px 16px 16px' }}>
+            <textarea
+              className="textarea"
+              rows={4}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              disabled={!editable}
+            />
+          </div>
+        </details>
+
+        <div className="form-field desktop-only" style={{ marginTop: 16 }}>
           <label className="form-label">備考</label>
           <textarea
             className="textarea"
@@ -367,32 +441,56 @@ export function QuoteEditorCard({
         </div>
 
         {editable ? (
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="desktop-only" style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>
               {saving ? '保存中…' : '明細を保存'}
             </button>
-            {msg ? <span className="cust-meta">{msg}</span> : null}
           </div>
         ) : (
-          <p className="cust-meta" style={{ marginTop: 12 }}>
+          <p className="cust-meta desktop-only" style={{ marginTop: 12 }}>
             この見積は編集できません。複製発行でコピーしてから編集してください。
           </p>
         )}
 
         {notes && !editable ? (
-          <div className="quote-notes" style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>
+          <div className="quote-notes desktop-only" style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>
             {notes}
           </div>
         ) : null}
 
-        <QuoteStaffActions
-          quoteId={initialQuote.id}
-          vehicleId={vehicleId}
-          shareUrl={shareUrl}
-          lineNotifyEligible={lineNotifyEligible && Boolean(shareUrl)}
-        />
+        <div className="desktop-only">
+          <QuoteStaffActions
+            quoteId={initialQuote.id}
+            vehicleId={vehicleId}
+            shareUrl={shareUrl}
+            lineNotifyEligible={lineNotifyEligible && Boolean(shareUrl)}
+            variant="inline"
+          />
+        </div>
 
-        <p className="cust-meta" style={{ marginTop: 12 }}>
+        <details className="accordion-details mobile-only" style={{ marginTop: 10 }}>
+          <summary className="accordion-summary">
+            <span className="accordion-summary-title">送付・その他</span>
+          </summary>
+          <div style={{ padding: '12px 16px 16px' }}>
+            <QuoteStaffActions
+              quoteId={initialQuote.id}
+              vehicleId={vehicleId}
+              shareUrl={shareUrl}
+              lineNotifyEligible={lineNotifyEligible && Boolean(shareUrl)}
+              variant="stacked"
+            />
+            <p className="cust-meta" style={{ marginTop: 12 }}>
+              自動車区分・エコ減税は{' '}
+              <Link className="panel-link" href={`/customers/${customerId}`}>
+                顧客詳細（車両）
+              </Link>
+              で編集
+            </p>
+          </div>
+        </details>
+
+        <p className="cust-meta desktop-only" style={{ marginTop: 12 }}>
           自動車区分・エコ減税の設定は{' '}
           <Link className="panel-link" href={`/customers/${customerId}`}>
             顧客詳細（車両）
@@ -400,6 +498,31 @@ export function QuoteEditorCard({
           で編集してください。
         </p>
       </div>
+
+      {editable && showMobileSaveBar ? (
+        <QuoteSaveBar
+          legalSubtotal={disp.non_taxable_subtotal}
+          grandTotal={disp.grand_total}
+          saving={saving}
+          onSave={() => void save()}
+        />
+      ) : null}
+
+      <QuoteLineEditSheet
+        open={editingLine !== null}
+        onClose={() => setEditingLine(null)}
+        line={editingLine?.line ?? null}
+        which={editingLine?.which ?? 'legal'}
+        onSave={(patch) => {
+          if (!editingLine) return;
+          patchLine(editingLine.which, editingLine.line.id, patch);
+        }}
+        onDelete={
+          editingLine && editable
+            ? () => removeLine(editingLine.which, editingLine.line.id)
+            : undefined
+        }
+      />
     </section>
   );
 }

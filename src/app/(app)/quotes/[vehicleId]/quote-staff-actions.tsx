@@ -6,15 +6,16 @@ import { useState } from 'react';
 export function QuoteStaffActions(props: {
   quoteId: string;
   vehicleId: string;
-  /** 署名付き URL。未設定なら環境変数不足 */
   shareUrl: string | null;
   lineNotifyEligible: boolean;
+  variant?: 'inline' | 'stacked';
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
   const [busyCopy, setBusyCopy] = useState(false);
   const [busyLine, setBusyLine] = useState(false);
   const [busyClone, setBusyClone] = useState(false);
+  const stacked = props.variant === 'stacked';
 
   async function copyUrl() {
     if (!props.shareUrl) return;
@@ -61,7 +62,7 @@ export function QuoteStaffActions(props: {
           vehicle_id: props.vehicleId,
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string; id?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setMsg(json.error ?? `複製に失敗しました（${res.status}）`);
         return;
@@ -74,15 +75,16 @@ export function QuoteStaffActions(props: {
     }
   }
 
+  const btnClass = stacked ? 'btn' : 'btn btn-sm';
+  const primaryClass = stacked ? 'btn btn-primary' : 'btn btn-sm btn-primary';
+
   return (
-    <div className="quote-staff-actions" style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <div
+      className={`quote-staff-actions ${stacked ? 'quote-staff-actions-stacked' : ''}`}
+      style={stacked ? undefined : { marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}
+    >
       {props.shareUrl ? (
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
-          onClick={() => copyUrl()}
-          disabled={busyCopy}
-        >
+        <button type="button" className={primaryClass} onClick={() => copyUrl()} disabled={busyCopy}>
           {busyCopy ? 'コピー中…' : '公開URLをコピー'}
         </button>
       ) : (
@@ -90,27 +92,27 @@ export function QuoteStaffActions(props: {
       )}
       <button
         type="button"
-        className="btn btn-sm"
-        style={{ background: 'var(--line-green-soft)', borderColor: 'var(--line-green)' }}
+        className={btnClass}
+        style={stacked ? undefined : { background: 'var(--line-green-soft)', borderColor: 'var(--line-green)' }}
         disabled={busyLine || !props.lineNotifyEligible || !props.shareUrl}
         onClick={() => notifyLine()}
       >
         {busyLine ? '送信中…' : 'LINEで送信'}
       </button>
-      <button type="button" className="btn btn-sm btn-done" disabled={busyClone} onClick={() => cloneQuote()}>
+      <button type="button" className={`${btnClass} btn-done`} disabled={busyClone} onClick={() => cloneQuote()}>
         {busyClone ? '処理中…' : '複製発行'}
       </button>
-      {!props.lineNotifyEligible ? (
-        <span className="cust-meta">
-          （LINE送信: 顧客に LINE userId＋送信同意がある場合のみ）
-        </span>
+      {!props.lineNotifyEligible && !props.shareUrl ? (
+        <span className="cust-meta">LINE送信には顧客の LINE 紐付けと送信同意が必要です。</span>
+      ) : !props.lineNotifyEligible ? (
+        <span className="cust-meta">（LINE送信: 顧客に LINE userId＋送信同意がある場合のみ）</span>
       ) : null}
       {msg ? (
         <div className="cust-meta" style={{ width: '100%', color: 'var(--accent)', fontWeight: 500 }}>
           {msg}
         </div>
       ) : null}
-      {props.shareUrl ? (
+      {props.shareUrl && !stacked ? (
         <div style={{ fontSize: 11, opacity: 0.75, width: '100%', wordBreak: 'break-all' }}>
           <code>{props.shareUrl}</code>
         </div>

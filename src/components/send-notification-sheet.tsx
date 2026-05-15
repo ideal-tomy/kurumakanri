@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { QuoteEditorSheet } from '@/components/quote-editor-sheet';
 import { formatYen } from '@/lib/format';
 import {
   fetchSendPreview,
@@ -42,6 +43,7 @@ export function SendNotificationSheet({
   const [lineBody, setLineBody] = useState('');
   const [mailBody, setMailBody] = useState('');
   const [previewNonce, setPreviewNonce] = useState(0);
+  const [quoteEditorOpen, setQuoteEditorOpen] = useState(false);
 
   const bulk = customerIds.length > 1;
   const wantLine = channel === 'LINE' || channel === 'BOTH';
@@ -148,9 +150,11 @@ export function SendNotificationSheet({
 
   const editQuoteHref = item?.vehicle_id ? `/quotes/${item.vehicle_id}?notify=1` : null;
 
-  if (!open) return null;
+  if (!open && !quoteEditorOpen) return null;
 
   return (
+    <>
+    {open ? (
     <dialog
       ref={dialogRef}
       className="preview-sheet-root"
@@ -264,15 +268,14 @@ export function SendNotificationSheet({
                 </a>
               ) : null}
               {editQuoteHref ? (
-                <a
-                  href={editQuoteHref}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
                   className="btn btn-sm btn-outline-secondary-lg"
-                  style={{ justifyContent: 'center', textDecoration: 'none' }}
+                  style={{ justifyContent: 'center' }}
+                  onClick={() => setQuoteEditorOpen(true)}
                 >
-                  見積の明細を編集する（別タブ）
-                </a>
+                  見積の明細を編集する
+                </button>
               ) : item.customer_id ? (
                 <Link
                   href={`/customers/${item.customer_id}`}
@@ -346,5 +349,18 @@ export function SendNotificationSheet({
         )}
       </div>
     </dialog>
+    ) : null}
+
+      <QuoteEditorSheet
+        open={quoteEditorOpen}
+        onClose={() => setQuoteEditorOpen(false)}
+        vehicleId={item?.vehicle_id ?? null}
+        vehicleLabel={item?.name ? `${item.name} 様` : null}
+        onSaved={() => {
+          setQuoteEditorOpen(false);
+          setPreviewNonce((n) => n + 1);
+        }}
+      />
+    </>
   );
 }

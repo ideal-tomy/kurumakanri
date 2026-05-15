@@ -215,14 +215,29 @@ export function quoteTotalsForDisplay(quote: {
   const legal = rowsFromStoredJson(quote.legal_items);
   const service = rowsFromStoredJson(quote.service_items);
   const computed = computeTotalsFromParts(legal, service);
+  const totalFromDb =
+    quote.total_amount != null && quote.total_amount > 0 ? quote.total_amount : null;
   return {
     legal,
     service,
     non_taxable_subtotal: quote.non_taxable_subtotal ?? computed.non_taxable_subtotal,
     taxable_subtotal_ex_tax: quote.taxable_subtotal_ex_tax ?? computed.taxable_subtotal_ex_tax,
     tax_amount_10: quote.tax_amount_10 ?? computed.tax_amount_10,
-    grand_total: quote.grand_total ?? quote.total_amount ?? computed.grand_total,
+    grand_total: quote.grand_total ?? totalFromDb ?? computed.grand_total,
     taxable_tax_included: computed.taxable_tax_included,
+  };
+}
+
+/** 編集画面: 明細行から常にライブ集計（DB の 0 円スナップショットに引きずられない） */
+export function quoteTotalsFromLinePayloads(
+  legal_items: QuoteLineItem[],
+  service_items: QuoteLineItem[],
+) {
+  const totals = computeTotalsFromParts(legal_items, service_items);
+  return {
+    legal: legal_items,
+    service: service_items,
+    ...totals,
   };
 }
 

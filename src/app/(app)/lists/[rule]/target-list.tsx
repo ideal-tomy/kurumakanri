@@ -270,13 +270,13 @@ export function TargetList({
                       <div className="list-card-name">
                         {t.name}
                       </div>
-                      <div className="list-card-meta">{t.phone ?? '電話番号未登録'}</div>
-                      <div className="list-card-vehicle">
-                        <span>
-                          {t.maker} {t.model}
-                        </span>
-                        {t.plate && <span className="plate">{t.plate}</span>}
-                      </div>
+                      {(t.maker || t.model) && (
+                        <div className="list-card-vehicle">
+                          <span>
+                            {t.maker} {t.model}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="list-card-side">
                       <div className={`list-card-days ${urgency}`}>
@@ -286,32 +286,26 @@ export function TargetList({
                         {formatDate(t.inspection_expire_date) || '満了日未設定'}
                       </div>
                     </div>
-                  </div>
-                      <div
-                        className="list-card-meta list-card-hit-meta"
-                        style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}
-                      >
-                    <span>推定走行 {formatKm(t.estimated_mileage)}</span>
-                    {!t.vehicle_id ? (
-                      <span>見積: 車両なし</span>
-                    ) : t.latest_quote_total_amount != null ? (
-                      <span>見積 {formatYen(t.latest_quote_total_amount)}</span>
-                    ) : (
-                      <span style={{ color: 'var(--warn)' }}>見積未作成</span>
-                    )}
-                    {rule === 'oil_4000km' && (
-                      <span>
-                        オイル目安 {formatKm(t.next_oil_target_km)}（超過 {formatKm(t.oil_overage_km)}）
-                      </span>
-                    )}
-                  </div>
-                  <div className="list-card-actions">
-                    <div className="list-card-badges">
-                      <Badge variant={t.line_user_id ? 'success' : 'neutral'}>LINE</Badge>
-                      <Badge variant={t.email ? 'success' : 'neutral'}>MAIL</Badge>
                     </div>
-                        <span className="list-card-cta-hint">{ctaLabel}</span>
+                    <div className="list-card-hit-bottom">
+                      <div className="list-card-hit-meta">
+                        <span>推定走行 {formatKm(t.estimated_mileage)}</span>
+                        {!t.vehicle_id ? (
+                          <span>見積: 車両なし</span>
+                        ) : t.latest_quote_total_amount != null ? (
+                          <span>見積 {formatYen(t.latest_quote_total_amount)}</span>
+                        ) : (
+                          <span className="list-card-warn">見積未作成</span>
+                        )}
+                        {rule === 'oil_4000km' && (
+                          <span>
+                            オイル目安 {formatKm(t.next_oil_target_km)}（超過{' '}
+                            {formatKm(t.oil_overage_km)}）
+                          </span>
+                        )}
                       </div>
+                      <span className="list-card-cta-hint">{ctaLabel}</span>
+                    </div>
                     </button>
                   </div>
                 </li>

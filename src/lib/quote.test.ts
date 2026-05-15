@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutoQuote } from './quote';
+import { buildAutoQuote, computeTotalsFromParts, quoteTotalsForDisplay, quoteTotalsFromLinePayloads } from './quote';
 
 describe('buildAutoQuote', () => {
   it('sums legal and taxable service parts into grand_total', () => {
@@ -31,5 +31,32 @@ describe('buildAutoQuote', () => {
   it('appends extra notes', () => {
     const r = buildAutoQuote({ notesAppend: '追加メモ' });
     expect(r.notes).toContain('追加メモ');
+  });
+});
+
+describe('quoteTotalsForDisplay', () => {
+  it('uses computed grand_total when DB total_amount is 0', () => {
+    const legal = [{ label: '重量税', amount: 10000, quantity: 1, unit_price: 10000, tax_treatment: 'NON_TAXABLE' as const, category: 'legal' as const }];
+    const service = [{ label: '点検', amount: 11000, quantity: 1, unit_price: 11000, tax_treatment: 'TAXABLE_10' as const, category: 'service' as const }];
+    const d = quoteTotalsForDisplay({
+      legal_items: legal,
+      service_items: service,
+      total_amount: 0,
+      grand_total: null,
+    });
+    expect(d.grand_total).toBe(21000);
+    expect(d.non_taxable_subtotal).toBe(10000);
+  });
+});
+
+describe('quoteTotalsFromLinePayloads', () => {
+  it('matches computeTotalsFromParts for editor live totals', () => {
+    const legal = [{ label: '自賠責', amount: 17650, quantity: 1, unit_price: 17650, tax_treatment: 'NON_TAXABLE' as const, category: 'legal' as const }];
+    const service = [{ label: '点検', amount: 28000, quantity: 1, unit_price: 28000, tax_treatment: 'TAXABLE_10' as const, category: 'service' as const }];
+    const live = quoteTotalsFromLinePayloads(legal, service);
+    const raw = computeTotalsFromParts(legal, service);
+    expect(live.grand_total).toBe(raw.grand_total);
+    expect(live.non_taxable_subtotal).toBe(17650);
+    expect(live.taxable_tax_included).toBe(28000);
   });
 });
