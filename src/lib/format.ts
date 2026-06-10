@@ -19,6 +19,18 @@ export function formatDate(d: string | null | undefined): string {
   });
 }
 
+/** 顧客ポータルのアラート用（例: 2026年5月30日） */
+export function formatDateLong(d: string | null | undefined): string {
+  if (!d) return '-';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return d;
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export function formatDateTime(d: string | null | undefined): string {
   if (!d) return '-';
   const date = new Date(d);

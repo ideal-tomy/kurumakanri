@@ -2,12 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { insertIssuedQuoteForVehicle } from '@/lib/quotes/insert-issued-quote';
-import type {
-  CustomerOverviewRow,
-  StatutoryFeeRateRow,
-  VehicleRow,
-} from '@/lib/supabase/types';
+import { ensureQuotesForCustomers } from '@/lib/notifications/ensure-quotes-for-customers';
 import { writeAudit } from '@/lib/audit';
 
 const Body = z.object({
@@ -28,61 +23,12 @@ export async function POST(req: Request) {
   }
 
   const supabase = getServerSupabase();
-  const { data: ratesData } = await supabase
-    .from('statutory_fee_rates')
-    .select('*')
-    .order('effective_from', { ascending: false });
-  const rates = (ratesData ?? []) as StatutoryFeeRateRow[];
-
-  let created = 0;
-  let skipped = 0;
-  const errors: string[] = [];
-
-  for (const customerId of parsed.data.customer_ids) {
-    const { data: overview } = await supabase
-      .from('v_customer_overview')
-      .select('*')
-      .eq('customer_id', customerId)
-      .maybeSingle<CustomerOverviewRow>();
-
-    if (!overview?.vehicle_id) {
-      errors.push(`${customerId}: 車両なし`);
-      continue;
-    }
-
-    const { data: quoteExists } = await supabase
-      .from('quotes')
-      .select('id')
-      .eq('vehicle_id', overview.vehicle_id)
-      .limit(1)
-      .maybeSingle();
-
-    if (!parsed.data.force && quoteExists?.id) {
-      skipped += 1;
-      continue;
-    }
-
-    const { data: vehicle } = await supabase
-      .from('vehicles')
-      .select('*')
-      .eq('id', overview.vehicle_id)
-      .maybeSingle<VehicleRow>();
-
-    if (!vehicle) {
-      errors.push(`${customerId}: 車両行が取得できません`);
-      continue;
-    }
-
-    const result = await insertIssuedQuoteForVehicle(
-      supabase,
-      { userId: ctx.userId, auditAction: 'quote.ensure_customer' },
-      vehicle,
-      rates,
-    );
-
-    if (result.ok) created += 1;
-    else errors.push(`${customerId}: ${result.error}`);
-  }
+  const { created, skipped, errors } = await ensureQuotesForCustomers(
+    supabase,
+    ctx.userId,
+    parsed.data.customer_ids,
+    { force: parsed.data.force },
+  );
 
   await writeAudit({
     userId: ctx.userId,

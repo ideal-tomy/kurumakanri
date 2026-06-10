@@ -5,6 +5,10 @@ import { sendMail } from './providers/mail';
 import { buildOptOutToken } from './optout';
 import { computeEstimatedMileage, daysUntil, nextOilTargetKm } from './mileage';
 import { buildIdempotencyKey } from './idempotency';
+import {
+  buildCustomerPortalToken,
+  isCustomerPortalConfigured,
+} from './customer-portal-share';
 import { buildQuoteShareToken, isQuoteShareConfigured } from './quote-share';
 import {
   buildLegalFeesTextFallback,
@@ -67,7 +71,13 @@ export async function buildMessageVariables(
   );
   const days = overview.days_until_inspection ?? daysUntil(overview.inspection_expire_date) ?? 0;
 
-  let quoteUrl = `${siteUrl}/me?cid=${overview.customer_id}`;
+  const legacyCustomerUrl = `${siteUrl}/me?cid=${overview.customer_id}`;
+  let portalUrl = legacyCustomerUrl;
+  if (isCustomerPortalConfigured()) {
+    portalUrl = `${siteUrl}/p/${buildCustomerPortalToken(overview.customer_id)}#quote`;
+  }
+
+  let quoteUrl = legacyCustomerUrl;
   let latestLegalItemsJson: unknown = null;
   let latestQuoteGrandTotal: number | null = null;
   let latestQuoteValidUntil: string | null = null;
@@ -123,8 +133,9 @@ export async function buildMessageVariables(
     mileage: estimated.toLocaleString('ja-JP'),
     nextOilTargetKm: oilTarget.toLocaleString('ja-JP'),
     oilIntervalKm: oilInterval.toLocaleString('ja-JP'),
+    portalUrl,
     quoteUrl,
-    bookingUrl: `${siteUrl}/me?cid=${overview.customer_id}#booking`,
+    bookingUrl: `${portalUrl}#booking`,
     unsubscribeUrl: `${siteUrl}/u/${optoutToken}`,
     maintenanceInfoUrl: `${siteUrl}/info/maintenance`,
     oilInfoUrl: `${siteUrl}/info/oil`,

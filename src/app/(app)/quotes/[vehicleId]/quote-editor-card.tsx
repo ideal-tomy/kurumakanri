@@ -58,6 +58,7 @@ export function QuoteEditorCard({
   const [saving, setSaving] = useState(false);
 
   const [editingLine, setEditingLine] = useState<{ which: 'legal' | 'service'; line: EditableLine } | null>(null);
+  const closeLineEdit = useCallback(() => setEditingLine(null), []);
 
   const savedSnapshot = useRef(
     serializeEditorState(
@@ -89,9 +90,12 @@ export function QuoteEditorCard({
     );
   }, [editable, legalLines, serviceLines, notes, status]);
 
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
+
   useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [isDirty, onDirtyChange]);
+    onDirtyChangeRef.current?.(isDirty);
+  }, [isDirty]);
 
   useEffect(() => {
     if (!isDirty || !editable) return;
@@ -360,7 +364,10 @@ export function QuoteEditorCard({
   ) : null;
 
   return (
-    <section className="panel quote-editor-card" style={{ marginBottom: 24 }}>
+    <section
+      className={`panel quote-editor-card${showMobileSaveBar ? ' quote-editor-card-active' : ''}`}
+      style={{ marginBottom: 24 }}
+    >
       <QuoteMobileSummary
         quoteNo={initialQuote.quote_no}
         status={status}
@@ -463,7 +470,7 @@ export function QuoteEditorCard({
             quoteId={initialQuote.id}
             vehicleId={vehicleId}
             shareUrl={shareUrl}
-            lineNotifyEligible={lineNotifyEligible && Boolean(shareUrl)}
+            lineNotifyEligible={lineNotifyEligible}
             variant="inline"
           />
         </div>
@@ -477,7 +484,7 @@ export function QuoteEditorCard({
               quoteId={initialQuote.id}
               vehicleId={vehicleId}
               shareUrl={shareUrl}
-              lineNotifyEligible={lineNotifyEligible && Boolean(shareUrl)}
+              lineNotifyEligible={lineNotifyEligible}
               variant="stacked"
             />
             <p className="cust-meta" style={{ marginTop: 12 }}>
@@ -504,13 +511,14 @@ export function QuoteEditorCard({
           legalSubtotal={disp.non_taxable_subtotal}
           grandTotal={disp.grand_total}
           saving={saving}
+          quoteLabel={initialQuote.quote_no}
           onSave={() => void save()}
         />
       ) : null}
 
       <QuoteLineEditSheet
         open={editingLine !== null}
-        onClose={() => setEditingLine(null)}
+        onClose={closeLineEdit}
         line={editingLine?.line ?? null}
         which={editingLine?.which ?? 'legal'}
         onSave={(patch) => {

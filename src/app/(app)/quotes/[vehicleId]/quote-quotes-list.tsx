@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+const MOBILE_MAX_PX = 1100;
 import { formatDate, formatYen } from '@/lib/format';
 import { quoteTotalsForDisplay, rowsFromStoredJson } from '@/lib/quote';
 import type { QuoteRow } from '@/lib/supabase/types';
@@ -42,17 +44,31 @@ export function QuoteQuotesList({
   const [activeSaveQuoteId, setActiveSaveQuoteId] = useState(quotes[0]?.id ?? '');
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
   const [dirtyByQuote, setDirtyByQuote] = useState<Record<string, boolean>>({});
+  const [isMobile, setIsMobile] = useState(false);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_MAX_PX}px)`);
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     const anyDirty = Object.values(dirtyByQuote).some(Boolean);
-    onDirtyChange?.(anyDirty);
-  }, [dirtyByQuote, onDirtyChange]);
+    onDirtyChangeRef.current?.(anyDirty);
+  }, [dirtyByQuote]);
 
   const handleDirty = useCallback((quoteId: string, dirty: boolean) => {
-    setDirtyByQuote((prev) => ({ ...prev, [quoteId]: dirty }));
+    setDirtyByQuote((prev) => {
+      if (prev[quoteId] === dirty) return prev;
+      return { ...prev, [quoteId]: dirty };
+    });
   }, []);
 
-  const renderCard = (q: QuoteRow) => (
+  const renderCard = (q: QuoteRow, enableMobileSaveBar: boolean) => (
     <QuoteEditorCard
       key={`${q.id}-${q.updated_at ?? ''}`}
       quote={q}
@@ -60,23 +76,19 @@ export function QuoteQuotesList({
       customerId={customerId}
       shareUrl={shareUrlsByQuoteId[q.id] ?? null}
       lineNotifyEligible={lineNotifyEligible}
-      showMobileSaveBar={activeSaveQuoteId === q.id}
+      showMobileSaveBar={enableMobileSaveBar && activeSaveQuoteId === q.id}
       onDirtyChange={(d) => handleDirty(q.id, d)}
       embedded={embedded}
       onSaved={onQuoteSaved}
     />
   );
 
-  return (
-    <>
-      <div className="desktop-only">
-        {quotes.map((q) => renderCard(q))}
-      </div>
-
+  if (isMobile) {
+    return (
       <div className="mobile-only quote-quotes-mobile">
         {quotes.map((q, i) => {
           if (i === 0) {
-            return renderCard(q);
+            return renderCard(q, true);
           }
 
           const total = quoteGrandTotal(q);
@@ -91,6 +103,7 @@ export function QuoteQuotesList({
                 if (el.open) {
                   setOpenArchiveId(q.id);
                   setActiveSaveQuoteId(q.id);
+                  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } else if (openArchiveId === q.id) {
                   setOpenArchiveId(null);
                   setActiveSaveQuoteId(quotes[0]?.id ?? '');
@@ -105,11 +118,17 @@ export function QuoteQuotesList({
                   {q.status} · {formatDate(q.issued_at)}
                 </span>
               </summary>
-              {renderCard(q)}
+              {renderCard(q, true)}
             </details>
           );
         })}
       </div>
-    </>
+    );
+  }
+
+  return (
+    <div className="desktop-only">
+      {quotes.map((q) => renderCard(q, false))}
+    </div>
   );
 }

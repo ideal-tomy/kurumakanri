@@ -2,25 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CustomerPortalPreviewFrame } from '@/components/customer-portal-preview-frame';
 import { formatYen } from '@/lib/format';
+import { useModalDialog } from '@/hooks/use-modal-dialog';
+import { fetchSendPreview, type SendPreviewItem } from '@/lib/notifications/send-preview-cache';
 import type { PresetNotificationRule } from '@/lib/notifications/send-review-session';
 import { buildNotificationsReviewHref } from '@/lib/notifications/send-review-session';
-
-type PreviewQuote = {
-  tax_summary: {
-    non_taxable_subtotal: number;
-    grand_total: number;
-  };
-  legal_lines: Array<{ label: string; amount: number }>;
-  service_lines: Array<{ label: string; amount: number }>;
-};
-
-type PreviewItem = {
-  line_preview: string | null;
-  rule_label: string;
-  warnings: string[];
-  quote: PreviewQuote | null;
-};
 
 export interface PreviewBottomSheetProps {
   open: boolean;
@@ -49,66 +36,25 @@ export function PreviewBottomSheet({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [item, setItem] = useState<PreviewItem | null>(null);
+  const [item, setItem] = useState<SendPreviewItem | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [breakdown, setBreakdown] = useState(false);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    if (open) {
-      if (!el.open) el.showModal();
-    } else if (el.open) {
-      el.close();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    const onDialogClose = () => {
-      onClose();
-    };
-    el.addEventListener('close', onDialogClose);
-    return () => el.removeEventListener('close', onDialogClose);
-  }, [onClose]);
+  useModalDialog(dialogRef, open, onClose);
 
   useEffect(() => {
     if (!open) {
       setItem(null);
       setError(null);
-      setBreakdown(false);
       return;
     }
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
-      setBreakdown(false);
       try {
-        const res = await fetch('/api/notifications/review-payload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_ids: [customerId],
-            rule,
-            channel: 'LINE',
-          }),
-        });
-        const json = (await res.json()) as { items?: PreviewItem[]; error?: unknown };
-        if (!res.ok) {
-          const msg =
-            typeof json.error === 'string'
-              ? json.error
-              : json.error != null
-                ? JSON.stringify(json.error)
-                : 'プレビューの取得に失敗しました';
-          throw new Error(msg);
-        }
-        const first = json.items?.[0];
-        if (!first) throw new Error('プレビューデータがありません');
-        if (!cancelled) setItem(first);
+        const payload = await fetchSendPreview([customerId], rule, 'LINE');
+        if (!cancelled) setItem(payload.item);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -167,94 +113,78 @@ export function PreviewBottomSheet({
         if (e.target === dialogRef.current) dialogRef.current?.close();
       }}
     >
-      <div className="preview-sheet-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="preview-sheet-handle" aria-hidden />
-        <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35 }}>
-          {customerName ?? '名前未設定'} 様
-          {vehicleLabel ? ` / ${vehicleLabel}` : ''}
-        </div>
-        {(contextLine || plate) && (
-          <div className="action-card-meta" style={{ marginTop: 6 }}>
-            {contextLine}
-            {plate ? ` · ${plate}` : ''}
+      {open ? (
+        <div className="preview-sheet-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="preview-sheet-handle" aria-hidden />
+          <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35 }}>
+            {customerName ?? '名前未設定'} 様
+            {vehicleLabel ? ` / ${vehicleLabel}` : ''}
           </div>
-        )}
+          {(contextLine || plate) && (
+            <div className="action-card-meta" style={{ marginTop: 6 }}>
+              {contextLine}
+              {plate ? ` · ${plate}` : ''}
+            </div>
+          )}
 
-        {loading && <div className="empty" style={{ padding: 24 }}>読み込み中…</div>}
-        {error && (
-          <div className="badge badge-danger" style={{ display: 'block', marginTop: 12, padding: 10, whiteSpace: 'pre-wrap' }}>
-            {error}
-          </div>
-        )}
+          {loading && <div className="empty" style={{ padding: 24 }}>読み込み中…</div>}
+          {error && (
+            <div className="badge badge-danger" style={{ display: 'block', marginTop: 12, padding: 10, whiteSpace: 'pre-wrap' }}>
+              {error}
+            </div>
+          )}
 
-        {!loading && item && (
-          <>
-            {item.warnings.length > 0 && (
-              <div className="badge badge-warn" style={{ display: 'block', marginTop: 10, padding: 10, fontSize: 13 }}>
-                {item.warnings.join(' / ')}
-              </div>
-            )}
-
-            <div className="preview-sheet-section-title">LINE本文プレビュー</div>
-            <div className="preview-line-bubble">{item.line_preview ?? '（本文なし）'}</div>
-
-            {item.quote && (
-              <>
-                <div className="preview-sheet-section-title">見積サマリ</div>
-                <div className="preview-summary-row">
-                  <span>法定費用合計</span>
-                  <span style={{ fontWeight: 600 }}>{formatYen(legalTotal ?? 0)}</span>
+          {!loading && item && (
+            <>
+              {item.warnings.length > 0 && (
+                <div className="badge badge-warn" style={{ display: 'block', marginTop: 10, padding: 10, fontSize: 13 }}>
+                  {item.warnings.join(' / ')}
                 </div>
-                <div className="preview-summary-row">
-                  <span>税込総額</span>
-                  <span style={{ fontWeight: 600 }}>{formatYen(grandTotal ?? 0)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="preview-sheet-cancel"
-                  style={{ marginTop: 4, textAlign: 'left', paddingLeft: 0 }}
-                  onClick={() => setBreakdown((v) => !v)}
-                >
-                  {breakdown ? '▲ 内訳を閉じる' : '▼ 内訳を見る'}
-                </button>
-                {breakdown && (
-                  <div style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>法定行</div>
-                    {item.quote.legal_lines.map((l) => (
-                      <div key={l.label} className="preview-summary-row" style={{ fontSize: 13 }}>
-                        <span>{l.label}</span>
-                        <span>{formatYen(l.amount)}</span>
-                      </div>
-                    ))}
-                    <div style={{ fontWeight: 600, margin: '10px 0 6px' }}>サービス行</div>
-                    {item.quote.service_lines.map((l) => (
-                      <div key={l.label} className="preview-summary-row" style={{ fontSize: 13 }}>
-                        <span>{l.label}</span>
-                        <span>{formatYen(l.amount)}</span>
-                      </div>
-                    ))}
+              )}
+
+              <div className="preview-sheet-section-title">LINE本文プレビュー</div>
+              <div className="preview-line-bubble">{item.line_preview ?? '（本文なし）'}</div>
+
+              {item.quote ? (
+                <>
+                  <div className="preview-sheet-section-title">見積サマリ</div>
+                  <div className="preview-summary-row">
+                    <span>法定費用合計</span>
+                    <span style={{ fontWeight: 600 }}>{formatYen(legalTotal ?? 0)}</span>
                   </div>
-                )}
-              </>
-            )}
+                  <div className="preview-summary-row">
+                    <span>税込総額</span>
+                    <span style={{ fontWeight: 600 }}>{formatYen(grandTotal ?? 0)}</span>
+                  </div>
+                </>
+              ) : null}
 
-            <button
-              type="button"
-              className="btn-line-send-lg"
-              disabled={sending}
-              onClick={() => void handleSend()}
-            >
-              {sending ? '送信中…' : 'LINE で送付する ▶'}
-            </button>
-            <button type="button" className="btn-outline-secondary-lg" onClick={goEdit}>
-              文面を編集する
-            </button>
-            <button type="button" className="preview-sheet-cancel" onClick={() => dialogRef.current?.close()}>
-              キャンセル
-            </button>
-          </>
-        )}
-      </div>
+              <div className="preview-sheet-section-title" style={{ marginTop: 16 }}>
+                顧客が見る画面
+              </div>
+              <CustomerPortalPreviewFrame
+                data={item.portal_preview}
+                portalUrl={item.portal_link_preview}
+              />
+
+              <button
+                type="button"
+                className="btn-line-send-lg"
+                disabled={sending}
+                onClick={() => void handleSend()}
+              >
+                {sending ? '送信中…' : 'LINE で送付する ▶'}
+              </button>
+              <button type="button" className="btn-outline-secondary-lg" onClick={goEdit}>
+                文面を編集する
+              </button>
+              <button type="button" className="preview-sheet-cancel" onClick={() => dialogRef.current?.close()}>
+                キャンセル
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
     </dialog>
   );
 }

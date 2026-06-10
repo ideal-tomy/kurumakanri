@@ -9,12 +9,15 @@ export function QuoteSaveBar({
   grandTotal,
   saving,
   disabled,
+  quoteLabel,
   onSave,
 }: {
   legalSubtotal: number;
   grandTotal: number;
   saving: boolean;
   disabled?: boolean;
+  /** 例: QT-2026-xxx（どの見積を保存するか） */
+  quoteLabel?: string | null;
   onSave: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -25,6 +28,9 @@ export function QuoteSaveBar({
     <div className="quote-save-bar mobile-only" role="region" aria-label="見積保存">
       <div className="quote-save-bar-inner">
         <div className="quote-save-bar-totals">
+          {quoteLabel ? (
+            <div className="quote-save-bar-editing-label">編集中: {quoteLabel}</div>
+          ) : null}
           <div className="quote-save-bar-line">
             <span className="quote-save-bar-label">法定</span>
             <span className="quote-save-bar-value-sm">{formatYen(legalSubtotal)}</span>

@@ -20,6 +20,8 @@ import type {
   ServiceHistoryRow,
   VehicleRow,
 } from '@/lib/supabase/types';
+import { PortalLinkCopy } from '@/components/portal-link-copy';
+import { buildCustomerPortalUrl } from '@/lib/customer-portal-share';
 import { computeEstimatedMileage, daysUntil } from '@/lib/mileage';
 import { formatDate, formatKm, priorityLabel } from '@/lib/format';
 
@@ -79,6 +81,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   const primaryVehicle = vehicles[0];
   const updateCustomer = updateCustomerAction.bind(null, customer.id);
   const updateConsent = updateConsentAction.bind(null, customer.id);
+  const portalUrl = buildCustomerPortalUrl(customer.id);
 
   return (
     <>
@@ -103,6 +106,26 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
       <div className="mobile-only">
         <CustomerSummaryStrip customer={customer} primaryVehicle={primaryVehicle} />
       </div>
+
+      <section className="panel customer-portal-panel">
+        <header className="panel-header">
+          <div className="panel-title">顧客向けポータル</div>
+        </header>
+        <div className="customer-portal-panel-body">
+          {portalUrl ? (
+            <>
+              <p className="cust-meta customer-portal-panel-desc">
+                LINE やメールでお客様に送る専用ページのリンクです。お車の状況・見積概要・整備履歴を確認できます。
+              </p>
+              <PortalLinkCopy url={portalUrl} />
+            </>
+          ) : (
+            <p className="cust-meta">
+              CUSTOMER_PORTAL_SECRET を設定するとリンクを発行できます。
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* デスクトップ: 従来の2カラム＋パネル */}
       <div className="desktop-only">

@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { CustomerPortalPreviewFrame } from '@/components/customer-portal-preview-frame';
 import { QuoteEditorSheet } from '@/components/quote-editor-sheet';
+import { useModalDialog } from '@/hooks/use-modal-dialog';
 import { formatYen } from '@/lib/format';
 import {
   fetchSendPreview,
@@ -44,30 +46,26 @@ export function SendNotificationSheet({
   const [mailBody, setMailBody] = useState('');
   const [previewNonce, setPreviewNonce] = useState(0);
   const [quoteEditorOpen, setQuoteEditorOpen] = useState(false);
+  const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
 
   const bulk = customerIds.length > 1;
   const wantLine = channel === 'LINE' || channel === 'BOTH';
   const wantMail = channel === 'MAIL' || channel === 'BOTH';
   const editDisabled = channel === 'BOTH';
 
-  useEffect(() => {
-    if (!open) return;
-    const el = dialogRef.current;
-    if (!el) return;
-    if (!el.open) el.showModal();
-    const onDialogClose = () => onClose();
-    el.addEventListener('close', onDialogClose);
-    return () => {
-      el.removeEventListener('close', onDialogClose);
-      if (el.open) el.close();
-    };
-  }, [open, onClose]);
+  const handleSheetClose = useCallback(() => {
+    if (!quoteEditorOpen) onClose();
+  }, [onClose, quoteEditorOpen]);
+
+  const sheetDialogOpen = open && !quoteEditorOpen;
+  useModalDialog(dialogRef, sheetDialogOpen, handleSheetClose);
 
   useEffect(() => {
     if (!open) {
       setItem(null);
       setError(null);
       setBreakdown(false);
+      setPortalPreviewOpen(false);
       setLineBody('');
       setMailBody('');
       return;
@@ -154,7 +152,6 @@ export function SendNotificationSheet({
 
   return (
     <>
-    {open ? (
     <dialog
       ref={dialogRef}
       className="preview-sheet-root"
@@ -162,6 +159,7 @@ export function SendNotificationSheet({
         if (e.target === dialogRef.current) dialogRef.current?.close();
       }}
     >
+      {open ? (
       <div className="preview-sheet-panel" onClick={(e) => e.stopPropagation()}>
         <div className="preview-sheet-handle" aria-hidden />
         <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35 }}>
@@ -255,16 +253,33 @@ export function SendNotificationSheet({
               </div>
             )}
 
+            <details
+              className="accordion-details"
+              style={{ marginTop: 12 }}
+              open={portalPreviewOpen}
+              onToggle={(e) => setPortalPreviewOpen((e.target as HTMLDetailsElement).open)}
+            >
+              <summary className="accordion-summary preview-sheet-breakdown-toggle" style={{ listStyle: 'none' }}>
+                <span className="accordion-summary-title">顧客が見る画面（プレビュー）</span>
+              </summary>
+              <div style={{ paddingTop: 12 }}>
+                <CustomerPortalPreviewFrame
+                  data={item.portal_preview}
+                  portalUrl={item.portal_link_preview}
+                />
+              </div>
+            </details>
+
             <div className="send-sheet-quote-actions">
-              {item.quote_link_preview ? (
+              {item.portal_link_preview ? (
                 <a
-                  href={item.quote_link_preview}
+                  href={item.portal_link_preview}
                   target="_blank"
                   rel="noreferrer"
                   className="btn btn-sm"
                   style={{ justifyContent: 'center', textDecoration: 'none' }}
                 >
-                  お見積ページを別タブで開く（顧客が見る画面）
+                  顧客ポータルを別タブで開く
                 </a>
               ) : null}
               {editQuoteHref ? (
@@ -330,6 +345,22 @@ export function SendNotificationSheet({
                 のみ」または「メール のみ」で送ってください。
               </p>
             )}
+            {!loading && item && !canSend && channel === 'LINE' && (
+              <div
+                className="badge badge-warn"
+                style={{ display: 'block', marginTop: 10, padding: 10, fontSize: 13 }}
+              >
+                LINE 本文が空のため送信できません。テンプレート（migration 0016 適用済みか）を確認するか、「金額・本文を再取得」を押してください。
+              </div>
+            )}
+            {!loading && item && !canSend && channel === 'MAIL' && (
+              <div
+                className="badge badge-warn"
+                style={{ display: 'block', marginTop: 10, padding: 10, fontSize: 13 }}
+              >
+                メール本文が空のため送信できません。テンプレートを確認するか、「金額・本文を再取得」を押してください。
+              </div>
+            )}
 
             <button
               type="button"
@@ -348,8 +379,8 @@ export function SendNotificationSheet({
           </>
         )}
       </div>
+      ) : null}
     </dialog>
-    ) : null}
 
       <QuoteEditorSheet
         open={quoteEditorOpen}

@@ -402,3 +402,82 @@ from public.vehicles v
 where v.customer_id between '10000000-0000-4000-8000-000000000001'::uuid and '10000000-0000-4000-8000-00000000000a'::uuid
   and v.vin like 'DEMO-VIN-%'
 on conflict (quote_no) do nothing;
+
+-- =====================================================================
+-- LINE送信テスト用顧客（車検180日リスト対象: 残日 150〜210）
+-- line_user_id は既存値を優先（本番で紐付け済みの ID を seed で消さない）
+-- =====================================================================
+
+insert into public.customers (id, name, furigana, phone, email, line_user_id, status, notes)
+values (
+  '10000000-0000-4000-8000-0000000000f1'::uuid,
+  'LINEテスト顧客',
+  'ライン テストコキャク',
+  '090-LINE-0001',
+  'line-test@demo.local',
+  null,
+  'ACTIVE',
+  'LINE送信テスト用（車検半年前リスト対象）'
+)
+on conflict (id) do update set
+  name = excluded.name,
+  furigana = excluded.furigana,
+  phone = excluded.phone,
+  email = excluded.email,
+  status = excluded.status,
+  notes = excluded.notes,
+  line_user_id = coalesce(public.customers.line_user_id, excluded.line_user_id);
+
+insert into public.vehicles (
+  customer_id, maker, model, plate, vin,
+  inspection_expire_date, initial_mileage, initial_mileage_recorded_at,
+  monthly_avg_km, last_oil_change_mileage, last_oil_change_at, oil_interval_km
+)
+select
+  '10000000-0000-4000-8000-0000000000f1'::uuid,
+  'トヨタ', 'プリウス', '横浜 399 て 9999', 'LINE-TEST-VIN-001',
+  current_date + 175, 42000, current_date - 90,
+  800, 38000, current_date - 120, 4000
+where exists (
+  select 1 from public.customers c
+  where c.id = '10000000-0000-4000-8000-0000000000f1'::uuid
+)
+and not exists (
+  select 1 from public.vehicles v
+  where v.customer_id = '10000000-0000-4000-8000-0000000000f1'::uuid
+);
+
+update public.vehicles v
+   set inspection_expire_date = current_date + 175,
+       updated_at = now()
+ where v.customer_id = '10000000-0000-4000-8000-0000000000f1'::uuid;
+
+insert into public.consents (customer_id, channel, opt_in, source)
+values
+  ('10000000-0000-4000-8000-0000000000f1'::uuid, 'LINE', true, 'seed_line_test'),
+  ('10000000-0000-4000-8000-0000000000f1'::uuid, 'MAIL', true, 'seed_line_test')
+on conflict (customer_id, channel) do update
+  set opt_in = excluded.opt_in, source = excluded.source, updated_at = now();
+
+insert into public.quotes (vehicle_id, quote_no, status, total_amount, legal_items, service_items, notes, valid_until, issued_at)
+select v.id,
+       'LINE-TEST-' || substring(replace(v.id::text, '-', '') from 1 for 12),
+       'ISSUED',
+       73150,
+       '[
+         {"label": "自賠責保険料（24ヶ月）", "amount": 17650},
+         {"label": "重量税（エコカー減税適用）", "amount": 15000},
+         {"label": "印紙代", "amount": 1800}
+       ]'::jsonb,
+       '[
+         {"label": "24ヶ月点検基本料", "amount": 28000},
+         {"label": "ブレーキフルード交換", "amount": 4500},
+         {"label": "エンジンオイル交換", "amount": 6200}
+       ]'::jsonb,
+       'LINE送信テスト用の見積です。',
+       v.inspection_expire_date,
+       now()
+from public.vehicles v
+where v.customer_id = '10000000-0000-4000-8000-0000000000f1'::uuid
+  and v.vin = 'LINE-TEST-VIN-001'
+on conflict (quote_no) do nothing;

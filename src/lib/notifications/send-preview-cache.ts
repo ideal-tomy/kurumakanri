@@ -1,29 +1,9 @@
+import type { ReviewPayloadItem } from '@/lib/notifications/review-payload-builder';
 import type { PresetNotificationRule } from '@/lib/notifications/send-review-session';
 
 export type SendPreviewChannel = 'LINE' | 'MAIL' | 'BOTH';
 
-export type SendPreviewQuote = {
-  id?: string;
-  tax_summary: {
-    non_taxable_subtotal: number;
-    grand_total: number;
-  };
-  legal_lines: Array<{ label: string; amount: number }>;
-  service_lines: Array<{ label: string; amount: number }>;
-};
-
-export type SendPreviewItem = {
-  customer_id: string | null;
-  vehicle_id: string | null;
-  plate: string | null;
-  line_preview: string | null;
-  mail_subject: string | null;
-  mail_body: string | null;
-  warnings: string[];
-  quote: SendPreviewQuote | null;
-  quote_link_preview: string | null;
-  name: string | null;
-};
+export type SendPreviewItem = ReviewPayloadItem;
 
 export type SendPreviewPayload = {
   item: SendPreviewItem;
@@ -59,24 +39,17 @@ export async function fetchSendPreview(
   if (pending) return pending;
 
   const promise = (async () => {
-    const ensureRes = await fetch('/api/quotes/ensure-for-customers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_ids: customerIds }),
-    });
-    const ensureJson = (await ensureRes.json()) as { error?: unknown };
-    if (!ensureRes.ok) {
-      throw new Error(
-        typeof ensureJson.error === 'string' ? ensureJson.error : '見積の確認に失敗しました',
-      );
-    }
-
-    const res = await fetch('/api/notifications/review-payload', {
+    const res = await fetch('/api/notifications/send-preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customer_ids: customerIds, rule, channel }),
     });
-    const json = (await res.json()) as { items?: SendPreviewItem[]; error?: unknown };
+    const json = (await res.json()) as {
+      item?: SendPreviewItem;
+      lineBody?: string;
+      mailBody?: string;
+      error?: unknown;
+    };
     if (!res.ok) {
       const msg =
         typeof json.error === 'string'
@@ -86,13 +59,13 @@ export async function fetchSendPreview(
             : 'プレビューの取得に失敗しました';
       throw new Error(msg);
     }
-    const first = json.items?.[0];
+    const first = json.item;
     if (!first) throw new Error('プレビューデータがありません');
 
     const payload: SendPreviewPayload = {
       item: first,
-      lineBody: first.line_preview ?? '',
-      mailBody: first.mail_body ?? '',
+      lineBody: json.lineBody ?? first.line_preview ?? '',
+      mailBody: json.mailBody ?? first.mail_body ?? '',
     };
     cache.set(key, payload);
     return payload;

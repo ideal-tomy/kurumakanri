@@ -3,9 +3,12 @@
 import { Fragment, Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CustomerPortalPreviewFrame } from '@/components/customer-portal-preview-frame';
 import { NextActions } from '@/components/next-actions';
 import { PageBack } from '@/components/page-back';
+import { useSendPreviewPrefetch } from '@/hooks/use-send-preview-prefetch';
 import { formatDate, formatYen } from '@/lib/format';
+import type { ReviewPayloadItem } from '@/lib/notifications/review-payload-builder';
 import type { SendReviewSessionPayload } from '@/lib/notifications/send-review-session';
 import {
   SEND_REVIEW_SESSION_KEY,
@@ -18,44 +21,7 @@ import {
 } from '@/lib/notifications/send-review-session';
 import { useToast } from '@/components/toast';
 
-type QuoteLinePreview = {
-  label: string;
-  quantity: number;
-  unit_price: number;
-  amount: number;
-};
-
-type ReviewItem = {
-  customer_id: string;
-  name: string | null;
-  vehicle_id: string | null;
-  plate: string | null;
-  rule_label: string;
-  line_preview: string | null;
-  mail_subject: string | null;
-  mail_body: string | null;
-  quote_link_preview: string | null;
-  quote: {
-    id: string;
-    quote_no: string | null;
-    grand_total: number;
-    issued_at: string | null;
-    legal_count: number;
-    service_count: number;
-    valid_until: string | null;
-    notes: string | null;
-    legal_lines: QuoteLinePreview[];
-    service_lines: QuoteLinePreview[];
-    tax_summary: {
-      non_taxable_subtotal: number;
-      taxable_tax_included: number;
-      taxable_subtotal_ex_tax: number;
-      tax_amount_10: number;
-      grand_total: number;
-    };
-  } | null;
-  warnings: string[];
-};
+type ReviewItem = ReviewPayloadItem & { customer_id: string };
 
 function ReviewSendClientInner() {
   const toast = useToast();
@@ -73,6 +39,11 @@ function ReviewSendClientInner() {
   const [sending, setSending] = useState(false);
   const [ensuring, setEnsuring] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const rulePreset = coercePresetNotificationRule(rule);
+  useSendPreviewPrefetch(customerIds, rulePreset, channel, {
+    enabled: customerIds.length > 0 && !loading,
+  });
 
   useEffect(() => {
     const parsed = parseCustomersQueryParam(searchParams);
@@ -425,108 +396,15 @@ function ReviewSendClientInner() {
                             </div>
                           ) : null}
 
-                          {row.quote_link_preview ? (
-                            <div style={{ marginTop: 16, fontSize: 12 }}>
-                              <div className="form-label">本文のお見積リンク（送信時）</div>
-                              <a href={row.quote_link_preview} target="_blank" rel="noreferrer" className="panel-link">
-                                {row.quote_link_preview}
-                              </a>
+                          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                            <div className="form-label" style={{ marginBottom: 12 }}>
+                              顧客が見る画面
                             </div>
-                          ) : null}
-
-                          {row.quote ? (
-                            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                              <div className="form-label" style={{ marginBottom: 8 }}>
-                                見積プレビュー（{row.quote.quote_no ?? row.quote.id.slice(0, 8)}）
-                              </div>
-                              <div className="cust-meta" style={{ marginBottom: 12 }}>
-                                発行 {formatDate(row.quote.issued_at)} ・ 有効 {formatDate(row.quote.valid_until)}
-                              </div>
-
-                              <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>法定・手数料（対象外）</div>
-                              <table style={{ width: '100%', maxWidth: 520, marginBottom: 14, borderCollapse: 'collapse', fontSize: 12 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', padding: '4px 6px' }}>
-                                      品目
-                                    </th>
-                                    <th style={{ textAlign: 'right', borderBottom: '1px solid var(--border)', padding: '4px 6px' }}>
-                                      金額
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.quote.legal_lines.map((line, i) => (
-                                    <tr key={`l-${i}`}>
-                                      <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
-                                        {line.label}
-                                        {line.quantity !== 1 ? <span className="cust-meta"> ×{line.quantity}</span> : null}
-                                      </td>
-                                      <td style={{ textAlign: 'right', padding: '4px 6px' }}>{formatYen(line.amount)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-
-                              <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>作業・部品（税込表示）</div>
-                              <table style={{ width: '100%', maxWidth: 520, marginBottom: 14, borderCollapse: 'collapse', fontSize: 12 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', padding: '4px 6px' }}>
-                                      品目
-                                    </th>
-                                    <th style={{ textAlign: 'right', borderBottom: '1px solid var(--border)', padding: '4px 6px' }}>
-                                      金額
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.quote.service_lines.map((line, i) => (
-                                    <tr key={`s-${i}`}>
-                                      <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
-                                        {line.label}
-                                        {line.quantity !== 1 ? <span className="cust-meta"> ×{line.quantity}</span> : null}
-                                      </td>
-                                      <td style={{ textAlign: 'right', padding: '4px 6px' }}>{formatYen(line.amount)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-
-                              <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>税サマリー</div>
-                              <table style={{ width: '100%', maxWidth: 360, marginBottom: 12, fontSize: 12 }}>
-                                <tbody>
-                                  <tr>
-                                    <td>対象外小計（法定）</td>
-                                    <td style={{ textAlign: 'right' }}>{formatYen(row.quote.tax_summary.non_taxable_subtotal)}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>10%対象・税込累計</td>
-                                    <td style={{ textAlign: 'right' }}>{formatYen(row.quote.tax_summary.taxable_tax_included)}</td>
-                                  </tr>
-                                  <tr className="cust-meta">
-                                    <td>　内・税抜相当</td>
-                                    <td style={{ textAlign: 'right' }}>{formatYen(row.quote.tax_summary.taxable_subtotal_ex_tax)}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>消費税（10%）</td>
-                                    <td style={{ textAlign: 'right' }}>{formatYen(row.quote.tax_summary.tax_amount_10)}</td>
-                                  </tr>
-                                  <tr style={{ fontWeight: 700 }}>
-                                    <td>合計（税込）</td>
-                                    <td style={{ textAlign: 'right' }}>{formatYen(row.quote.tax_summary.grand_total)}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-
-                              {row.quote.notes ? (
-                                <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--ink-2)' }}>
-                                  <div className="form-label">備考</div>
-                                  {row.quote.notes}
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
+                            <CustomerPortalPreviewFrame
+                              data={row.portal_preview}
+                              portalUrl={row.portal_link_preview}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ) : null}

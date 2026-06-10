@@ -32,15 +32,16 @@ export default async function TemplatesPage() {
           差し込み変数: <code>{'{{name}}'}</code> <code>{'{{carName}}'}</code>{' '}
           <code>{'{{plate}}'}</code> <code>{'{{expireDate}}'}</code>{' '}
           <code>{'{{daysLeft}}'}</code> <code>{'{{mileage}}'}</code>{' '}
-          <code>{'{{nextOilTargetKm}}'}</code> <code>{'{{quoteUrl}}'}</code>{' '}
+          <code>{'{{nextOilTargetKm}}'}</code> <code>{'{{portalUrl}}'}</code>{' '}
+          <code>{'{{quoteUrl}}'}</code>{' '}
           <code>{'{{grandTotal}}'}</code> <code>{'{{validUntil}}'}</code> <code>{'{{vehicleName}}'}</code>{' '}
           <code>{'{{legalFeesTotal}}'}</code> <code>{'{{legalFeesBreakdown}}'}</code>{' '}
           <code>{'{{maintenanceInfoUrl}}'}</code> <code>{'{{oilInfoUrl}}'}</code> <code>{'{{oilIntervalKm}}'}</code>{' '}
           <code>{'{{bookingUrl}}'}</code> <code>{'{{unsubscribeUrl}}'}</code>
         </div>
         <div style={{ padding: '0 16px 16px', fontSize: 12, color: 'var(--ink-2)' }}>
-          車検系（shaken_*）の既定文面は、顧客向けの<strong>主たる金額を法定概算（{'{{legalFeesTotal}}'}）</strong>にし、税込一式（{'{{grandTotal}}'}）は本文先頭に載せません。一式は{' '}
-          <code>{'{{quoteUrl}}'}</code> の見積ページで確認してもらう方針です（DB migration 0014 以降）。
+          車検系（shaken_* / quote_notify）の既定文面は、顧客向けの<strong>主たる金額を法定概算（{'{{legalFeesTotal}}'}）</strong>にし、詳細リンクは{' '}
+          <code>{'{{portalUrl}}'}</code> のみです。印刷・PDF はポータル内のボタンから <code>/q/</code> へ遷移します（migration 0016 以降）。
         </div>
       </section>
 

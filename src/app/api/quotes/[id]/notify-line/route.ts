@@ -2,19 +2,15 @@ import { NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLineMessage } from '@/lib/providers/line';
-import { buildQuoteShareToken, isQuoteShareConfigured } from '@/lib/quote-share';
 import { writeAudit } from '@/lib/audit';
+import { daysUntil } from '@/lib/mileage';
+import { renderLineNotificationForCustomer } from '@/lib/notifications/render-customer-line';
+import { resolveShakenTemplateKeyFromDays } from '@/lib/notifications/resolve-shaken-template';
+import type { CustomerOverviewRow } from '@/lib/supabase/types';
 
 export async function POST(_req: Request, ctx: { params: { id: string } }) {
   const authCtx = await requireStaff();
   const quoteId = ctx.params.id;
-
-  if (!isQuoteShareConfigured()) {
-    return NextResponse.json(
-      { error: 'QUOTE_SHARE_SECRET が未設定のため公開リンクを作成できません' },
-      { status: 500 },
-    );
-  }
 
   const supabase = getServerSupabase();
   const { data: quote, error } = await supabase
@@ -36,7 +32,7 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
     return NextResponse.json({ error: 'vehicle not found' }, { status: 404 });
   }
 
-  const [{ data: customer }, { data: consent }] = await Promise.all([
+  const [{ data: customer }, { data: consent }, { data: overview }] = await Promise.all([
     supabase
       .from('customers')
       .select('name, line_user_id')
@@ -48,6 +44,11 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
       .eq('customer_id', vehicle.customer_id)
       .eq('channel', 'LINE')
       .maybeSingle<{ opt_in: boolean | null }>(),
+    supabase
+      .from('v_customer_overview')
+      .select('*')
+      .eq('customer_id', vehicle.customer_id)
+      .maybeSingle<CustomerOverviewRow>(),
   ]);
 
   if (!customer?.line_user_id) {
@@ -56,12 +57,20 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
   if (consent && consent.opt_in === false) {
     return NextResponse.json({ error: 'LINE 通知はオプトアウト済みです' }, { status: 400 });
   }
+  if (!overview) {
+    return NextResponse.json({ error: '顧客情報が見つかりません' }, { status: 404 });
+  }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
-  const token = buildQuoteShareToken(quote.id);
-  const url = `${siteUrl}/q/${token}`;
-  const no = quote.quote_no ?? '';
-  const text = `${customer.name} 様\n\n車検のお見積をご案内します。\n（${no}）\n\n詳細・印刷はこちら:\n${url}`;
+  const days =
+    overview.days_until_inspection ?? daysUntil(overview.inspection_expire_date);
+  const templateKey = resolveShakenTemplateKeyFromDays(days);
+  const text = await renderLineNotificationForCustomer(overview, templateKey);
+  if (!text) {
+    return NextResponse.json(
+      { error: `LINE テンプレ「${templateKey}」が見つかりません` },
+      { status: 500 },
+    );
+  }
 
   const result = await sendLineMessage(customer.line_user_id, text);
   if (!result.success) {
@@ -76,8 +85,8 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
     action: 'quote.line_notify',
     resource: 'quotes',
     resourceId: quote.id,
-    payload: { preview: text.slice(0, 160) },
+    payload: { templateKey, preview: text.slice(0, 160) },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, template_key: templateKey });
 }

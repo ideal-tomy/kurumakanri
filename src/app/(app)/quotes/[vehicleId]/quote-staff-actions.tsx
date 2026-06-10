@@ -94,18 +94,16 @@ export function QuoteStaffActions(props: {
         type="button"
         className={btnClass}
         style={stacked ? undefined : { background: 'var(--line-green-soft)', borderColor: 'var(--line-green)' }}
-        disabled={busyLine || !props.lineNotifyEligible || !props.shareUrl}
+        disabled={busyLine || !props.lineNotifyEligible}
         onClick={() => notifyLine()}
       >
-        {busyLine ? '送信中…' : 'LINEで送信'}
+        {busyLine ? '送信中…' : 'LINEで送信（リストと同じ文面）'}
       </button>
       <button type="button" className={`${btnClass} btn-done`} disabled={busyClone} onClick={() => cloneQuote()}>
         {busyClone ? '処理中…' : '複製発行'}
       </button>
-      {!props.lineNotifyEligible && !props.shareUrl ? (
+      {!props.lineNotifyEligible ? (
         <span className="cust-meta">LINE送信には顧客の LINE 紐付けと送信同意が必要です。</span>
-      ) : !props.lineNotifyEligible ? (
-        <span className="cust-meta">（LINE送信: 顧客に LINE userId＋送信同意がある場合のみ）</span>
       ) : null}
       {msg ? (
         <div className="cust-meta" style={{ width: '100%', color: 'var(--accent)', fontWeight: 500 }}>

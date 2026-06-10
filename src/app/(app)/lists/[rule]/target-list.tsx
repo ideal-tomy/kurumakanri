@@ -78,8 +78,10 @@ export function TargetList({
   }
 
   const rulePreset = rule as PresetNotificationRule;
-  const prefetchIds = useMemo(() => targets.map((t) => t.customer_id), [targets]);
-  useSendPreviewPrefetch(prefetchIds, rulePreset, channel);
+  const prefetchIds = useMemo(() => [...selected], [selected]);
+  useSendPreviewPrefetch(prefetchIds, rulePreset, channel, {
+    enabled: prefetchIds.length > 0,
+  });
 
   return (
     <>

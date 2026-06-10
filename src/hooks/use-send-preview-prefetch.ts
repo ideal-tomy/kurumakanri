@@ -4,23 +4,30 @@ import { useEffect } from 'react';
 import { prefetchSendPreview, type SendPreviewChannel } from '@/lib/notifications/send-preview-cache';
 import type { PresetNotificationRule } from '@/lib/notifications/send-review-session';
 
-const MOBILE_MQ = '(max-width: 1100px)';
-const PREFETCH_STAGGER_MS = 450;
-const PREFETCH_MAX = 24;
+const PREFETCH_STAGGER_MS = 800;
+const PREFETCH_MAX = 5;
 const IDLE_TIMEOUT_MS = 2500;
 const FALLBACK_DELAY_MS = 1200;
 
+export type UseSendPreviewPrefetchOptions = {
+  /** false のとき先読みしない（default: true） */
+  enabled?: boolean;
+};
+
 /**
- * リスト表示後、アイドル時に1件ずつプレビューを先読みする（初期描画をブロックしない）。
+ * リスト／レビュー表示後、アイドル時に1件ずつプレビューを先読みする（初期描画をブロックしない）。
  */
 export function useSendPreviewPrefetch(
   customerIds: string[],
   rule: PresetNotificationRule,
   channel: SendPreviewChannel,
+  options?: UseSendPreviewPrefetchOptions,
 ) {
+  const enabled = options?.enabled !== false;
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!window.matchMedia(MOBILE_MQ).matches) return;
+    if (!enabled || customerIds.length === 0) return;
 
     let cancelled = false;
 
@@ -55,5 +62,5 @@ export function useSendPreviewPrefetch(
       }
       if (timeoutId != null) clearTimeout(timeoutId);
     };
-  }, [customerIds.join(','), rule, channel]);
+  }, [customerIds.join(','), rule, channel, enabled]);
 }

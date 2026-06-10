@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CustomerActionCard } from '@/components/customer-action-card';
 import { PreviewBottomSheet } from '@/components/preview-bottom-sheet';
+import { useModalDialog } from '@/hooks/use-modal-dialog';
 import type { PriorityQueueRow, TaskStatus, TaskType } from '@/lib/supabase/types';
 import {
   type PriorityFilterMode,
@@ -101,37 +102,8 @@ export function PrioritiesClient() {
     return () => clearTimeout(t);
   }, [message]);
 
-  useEffect(() => {
-    const el = filterDlgRef.current;
-    if (!el) return;
-    if (filterOpen) {
-      if (!el.open) el.showModal();
-    } else if (el.open) el.close();
-  }, [filterOpen]);
-
-  useEffect(() => {
-    const el = filterDlgRef.current;
-    if (!el) return;
-    const fn = () => setFilterOpen(false);
-    el.addEventListener('close', fn);
-    return () => el.removeEventListener('close', fn);
-  }, []);
-
-  useEffect(() => {
-    const el = manualDlgRef.current;
-    if (!el) return;
-    if (manualOpen) {
-      if (!el.open) el.showModal();
-    } else if (el.open) el.close();
-  }, [manualOpen]);
-
-  useEffect(() => {
-    const el = manualDlgRef.current;
-    if (!el) return;
-    const fn = () => setManualOpen(false);
-    el.addEventListener('close', fn);
-    return () => el.removeEventListener('close', fn);
-  }, []);
+  useModalDialog(filterDlgRef, filterOpen, () => setFilterOpen(false));
+  useModalDialog(manualDlgRef, manualOpen, () => setManualOpen(false));
 
   async function createTask() {
     if (!newTask.title.trim()) return;
