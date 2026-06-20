@@ -41,11 +41,16 @@ export interface QuoteEstimate extends QuoteTotals {
   notes: string;
 }
 
+export const QUOTE_SECTION_LABEL = {
+  basic: '車検基本費用',
+  additional: '追加整備・部品（実車確認後）',
+} as const;
+
 export const DEFAULT_NOTES =
   '※ 足回り・タイヤ等の状態によっては、実車確認後に追加整備が必要となる場合があります。\n' +
   '※ 法令・手続区分により実費が変わることがあります。本書は概算です。\n' +
   '※ エコカー減税・重量税の適用は、登録情報・実車・届出の内容により異なります（お客様の環境で変わることがあります）。店舗にてご確認ください。\n' +
-  '※ 表示のうち法定費用相当は消費税の対象外、作業工賃・部品は10%込みです。';
+  '※ 車検基本費用のうち法令費用は消費税の対象外、点検基本料等は10%込み、追加整備・部品は10%込みです。';
 
 function lineTaxIncluded(
   label: string,
@@ -85,10 +90,37 @@ export const LEGAL_ITEMS_FALLBACK: QuoteLineItem[] = [
   lineNonTax('代書費用', 770, 1, 'legal'),
 ];
 
+/** 車検基本費用に含める確定整備（法令費用以外・割引対象外想定） */
+export const FIXED_BASIC_ITEMS: QuoteLineItem[] = [
+  lineTaxIncluded('24ヶ月点検基本料', 28000, 1, 'legal'),
+];
+
+export function isBasicFeeServiceLine(label: string): boolean {
+  return label.includes('24ヶ月点検') || label.includes('24ヶ月点検基本料');
+}
+
+/** 旧見積互換: service 側に残っている基本費用行を legal へ移す */
+export function normalizeQuoteSections(
+  legal_items: QuoteLineItem[],
+  service_items: QuoteLineItem[],
+): { legal_items: QuoteLineItem[]; service_items: QuoteLineItem[] } {
+  const toMove = service_items.filter((i) => isBasicFeeServiceLine(i.label));
+  if (toMove.length === 0) return { legal_items, service_items };
+  const remaining = service_items.filter((i) => !isBasicFeeServiceLine(i.label));
+  const legalLabels = new Set(legal_items.map((i) => i.label));
+  const moved = toMove
+    .filter((i) => !legalLabels.has(i.label))
+    .map((i) => ({ ...i, category: 'legal' as const }));
+  return { legal_items: [...legal_items, ...moved], service_items: remaining };
+}
+
+export function sumLineItemsAmount(items: QuoteLineItem[]): number {
+  return items.reduce((acc, i) => acc + i.amount, 0);
+}
+
 export function LABOR_ITEMS_DEFAULT(includeOilChange: boolean): QuoteLineItem[] {
   const rows: QuoteLineItem[] = [
     lineTaxIncluded('車検代行費用（運搬・代替車含む・概算）', 25000, 1, 'service'),
-    lineTaxIncluded('24ヶ月点検基本料', 28000, 1, 'service'),
     lineTaxIncluded('ブレーキフルード交換', 4500, 1, 'service'),
   ];
   if (includeOilChange) {
@@ -212,8 +244,9 @@ export function quoteTotalsForDisplay(quote: {
   grand_total?: number | null;
   total_amount: number;
 }) {
-  const legal = rowsFromStoredJson(quote.legal_items);
-  const service = rowsFromStoredJson(quote.service_items);
+  const legalRaw = rowsFromStoredJson(quote.legal_items);
+  const serviceRaw = rowsFromStoredJson(quote.service_items);
+  const { legal_items: legal, service_items: service } = normalizeQuoteSections(legalRaw, serviceRaw);
   const computed = computeTotalsFromParts(legal, service);
   const totalFromDb =
     quote.total_amount != null && quote.total_amount > 0 ? quote.total_amount : null;
@@ -281,9 +314,8 @@ export function buildQuoteFromVehicle(args: {
         : null;
   const eco = specs.eco_reduction_eligible === true;
 
-  let legal_items: QuoteLineItem[];
-  if (rate) legal_items = legalLinesFromStatutory(rate, eco);
-  else legal_items = [...LEGAL_ITEMS_FALLBACK];
+  const statutory = rate ? legalLinesFromStatutory(rate, eco) : [...LEGAL_ITEMS_FALLBACK];
+  let legal_items: QuoteLineItem[] = [...statutory, ...FIXED_BASIC_ITEMS];
 
   let service_items = LABOR_ITEMS_DEFAULT(args.includeOilChange === true);
   if (args.extraServices?.length) service_items = [...service_items, ...args.extraServices];

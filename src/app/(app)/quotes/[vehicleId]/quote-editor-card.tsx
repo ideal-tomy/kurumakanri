@@ -12,12 +12,12 @@ import { useToast } from '@/components/toast';
 import { formatDate, formatYen } from '@/lib/format';
 import {
   type EditableLine,
+  initEditableSections,
   newLine,
   serializeEditorState,
-  toEditable,
   toPayload,
 } from '@/lib/quote-editor-utils';
-import { quoteTotalsFromLinePayloads } from '@/lib/quote';
+import { QUOTE_SECTION_LABEL, quoteTotalsFromLinePayloads, sumLineItemsAmount } from '@/lib/quote';
 import type { QuoteRow } from '@/lib/supabase/types';
 import { QuoteStaffActions } from './quote-staff-actions';
 
@@ -49,10 +49,9 @@ export function QuoteEditorCard({
   const toast = useToast();
   const editable = initialQuote.status === 'DRAFT' || initialQuote.status === 'ISSUED';
 
-  const [legalLines, setLegalLines] = useState<EditableLine[]>(() => toEditable(initialQuote.legal_items, 'leg'));
-  const [serviceLines, setServiceLines] = useState<EditableLine[]>(() =>
-    toEditable(initialQuote.service_items, 'svc'),
-  );
+  const initialSections = initEditableSections(initialQuote.legal_items, initialQuote.service_items);
+  const [legalLines, setLegalLines] = useState<EditableLine[]>(() => initialSections.legalLines);
+  const [serviceLines, setServiceLines] = useState<EditableLine[]>(() => initialSections.serviceLines);
   const [notes, setNotes] = useState(initialQuote.notes ?? '');
   const [status, setStatus] = useState(initialQuote.status);
   const [saving, setSaving] = useState(false);
@@ -61,19 +60,14 @@ export function QuoteEditorCard({
   const closeLineEdit = useCallback(() => setEditingLine(null), []);
 
   const savedSnapshot = useRef(
-    serializeEditorState(
-      toEditable(initialQuote.legal_items, 'leg'),
-      toEditable(initialQuote.service_items, 'svc'),
-      initialQuote.notes ?? '',
-      initialQuote.status,
-    ),
+    serializeEditorState(initialSections.legalLines, initialSections.serviceLines, initialQuote.notes ?? '', initialQuote.status),
   );
 
   const disp = useMemo(() => {
     const legal = toPayload(legalLines).map((l) => ({
       ...l,
       category: 'legal' as const,
-      tax_treatment: 'NON_TAXABLE' as const,
+      tax_treatment: l.tax_treatment,
     }));
     const service = toPayload(serviceLines).map((l) => ({
       ...l,
@@ -125,7 +119,7 @@ export function QuoteEditorCard({
       const legal = toPayload(legalLines).map((l) => ({
         ...l,
         category: 'legal' as const,
-        tax_treatment: 'NON_TAXABLE' as const,
+        tax_treatment: l.tax_treatment,
       }));
       const service = toPayload(serviceLines).map((l) => ({
         ...l,
@@ -324,11 +318,11 @@ export function QuoteEditorCard({
       <table className={className} style={{ width: '100%', maxWidth: 400, marginLeft: className ? undefined : 'auto', fontSize: 13 }}>
         <tbody>
           <tr>
-            <td>対象外小計（法定）</td>
+            <td>対象外小計（法令費用等）</td>
             <td style={{ textAlign: 'right' }}>{formatYen(disp.non_taxable_subtotal)}</td>
           </tr>
           <tr>
-            <td>10%対象・税込累計（作業等）</td>
+            <td>10%対象・税込累計</td>
             <td style={{ textAlign: 'right' }}>{formatYen(disp.taxable_tax_included)}</td>
           </tr>
           <tr>
@@ -371,8 +365,8 @@ export function QuoteEditorCard({
       <QuoteMobileSummary
         quoteNo={initialQuote.quote_no}
         status={status}
-        legalSubtotal={disp.non_taxable_subtotal}
-        serviceTaxIncluded={disp.taxable_tax_included}
+        basicFeesSubtotal={sumLineItemsAmount(disp.legal)}
+        additionalSubtotal={sumLineItemsAmount(disp.service)}
         grandTotal={disp.grand_total}
         isDirty={isDirty}
       />
@@ -404,11 +398,11 @@ export function QuoteEditorCard({
           </>
         ) : null}
 
-        {renderDesktopTable('legal', legalLines, '車検法定費用・手数料（対象外）')}
-        {renderDesktopTable('service', serviceLines, '作業工賃（税込み表示）・値引き')}
+        {renderDesktopTable('legal', legalLines, `${QUOTE_SECTION_LABEL.basic}（法令費用は対象外）`)}
+        {renderDesktopTable('service', serviceLines, `${QUOTE_SECTION_LABEL.additional}（税込）`)}
 
-        {renderMobileLineSection('legal', legalLines, '車検法定費用', false)}
-        {renderMobileLineSection('service', serviceLines, '作業・値引き', true)}
+        {renderMobileLineSection('legal', legalLines, QUOTE_SECTION_LABEL.basic, false)}
+        {renderMobileLineSection('service', serviceLines, QUOTE_SECTION_LABEL.additional, true)}
 
         <div className="desktop-only" style={{ marginTop: 16, fontSize: 13, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           {renderTaxBreakdown()}
@@ -508,7 +502,7 @@ export function QuoteEditorCard({
 
       {editable && showMobileSaveBar ? (
         <QuoteSaveBar
-          legalSubtotal={disp.non_taxable_subtotal}
+          basicFeesSubtotal={sumLineItemsAmount(disp.legal)}
           grandTotal={disp.grand_total}
           saving={saving}
           quoteLabel={initialQuote.quote_no}

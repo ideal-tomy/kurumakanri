@@ -1,6 +1,6 @@
 import { formatDate, formatYen } from '@/lib/format';
 import type { IssuerProfile } from '@/lib/issuer';
-import type { QuoteLineItem } from '@/lib/quote';
+import { QUOTE_SECTION_LABEL, type QuoteLineItem } from '@/lib/quote';
 
 export interface QuoteDocumentProps {
   issuer: IssuerProfile | null;
@@ -97,7 +97,7 @@ export function QuoteDocument(props: QuoteDocumentProps) {
         <tbody>
           <tr className="quote-doc-cat-row">
             <td colSpan={4}>
-              <strong>車検法定費用</strong>（対象外）
+              <strong>{QUOTE_SECTION_LABEL.basic}</strong>（法令費用は対象外）
             </td>
           </tr>
           {props.legal.map((item, idx) => (
@@ -110,7 +110,7 @@ export function QuoteDocument(props: QuoteDocumentProps) {
           ))}
           <tr className="quote-doc-cat-row">
             <td colSpan={4}>
-              <strong>作業工賃・部品</strong>（10% 込表示）
+              <strong>{QUOTE_SECTION_LABEL.additional}</strong>（10% 込表示）
             </td>
           </tr>
           {props.service.map((item, idx) => (
@@ -148,7 +148,7 @@ export function QuoteDocument(props: QuoteDocumentProps) {
               <span>{formatYen(props.taxableSubtotalExTax)}</span>
             </div>
             <div className="row small">
-              <span>対象外（法定費用等）</span>
+              <span>対象外（法令費用等）</span>
               <span>{formatYen(props.nonTaxableSubtotal)}</span>
             </div>
           </div>

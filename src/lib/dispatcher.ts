@@ -4,7 +4,7 @@ import { sendLineMessage } from './providers/line';
 import { sendMail } from './providers/mail';
 import { buildOptOutToken } from './optout';
 import { computeEstimatedMileage, daysUntil, nextOilTargetKm } from './mileage';
-import { buildIdempotencyKey } from './idempotency';
+import { buildIdempotencyKey, isNotificationIdempotencyDisabled } from './idempotency';
 import {
   buildCustomerPortalToken,
   isCustomerPortalConfigured,
@@ -79,6 +79,7 @@ export async function buildMessageVariables(
 
   let quoteUrl = legacyCustomerUrl;
   let latestLegalItemsJson: unknown = null;
+  let latestServiceItemsJson: unknown = null;
   let latestQuoteGrandTotal: number | null = null;
   let latestQuoteValidUntil: string | null = null;
   if (overview.customer_id) {
@@ -89,19 +90,21 @@ export async function buildMessageVariables(
       if (vid.length) {
         const { data: qr } = await srv
           .from('quotes')
-          .select('id, legal_items, grand_total, total_amount, valid_until')
+          .select('id, legal_items, service_items, grand_total, total_amount, valid_until')
           .in('vehicle_id', vid)
           .order('issued_at', { ascending: false })
           .limit(1)
           .maybeSingle<{
             id: string;
             legal_items: unknown;
+            service_items: unknown;
             grand_total: number | null;
             total_amount: number;
             valid_until: string | null;
           }>();
         if (qr?.id) {
           latestLegalItemsJson = qr.legal_items;
+          latestServiceItemsJson = qr.service_items;
           latestQuoteGrandTotal = qr.grand_total ?? qr.total_amount ?? null;
           latestQuoteValidUntil = qr.valid_until;
           if (isQuoteShareConfigured()) {
@@ -115,13 +118,13 @@ export async function buildMessageVariables(
   }
 
   const legalFees = latestLegalItemsJson
-    ? buildLegalFeesTextFromQuote(latestLegalItemsJson)
+    ? buildLegalFeesTextFromQuote(latestLegalItemsJson, latestServiceItemsJson)
     : buildLegalFeesTextFallback();
 
   const vehicleName = `${overview.maker ?? ''} ${overview.model ?? ''}`.trim() || 'お車';
 
   // grandTotal: 見積の税込一式（legal+service）。車検リマインド本文の「主たる金額」には使わず、
-  // legalFeesTotal / legalFeesBreakdown を使う（テンプレは 0014_notify_legal_primary 以降で統一）。
+  // legalFeesTotal / legalFeesBreakdown（= 車検基本費用）を使う（テンプレは 0014_notify_legal_primary 以降で統一）。
 
   return {
     name: overview.name,
@@ -221,25 +224,29 @@ export async function dispatchNotification(args: {
         ? renderTemplate(template.subject, vars)
         : null;
 
+  const idempotencyDisabled = isNotificationIdempotencyDisabled();
   const idempotencyKey = buildIdempotencyKey({
     customerId: args.customerId,
     ruleKey: args.ruleKey,
     channel: args.channel,
+    nonce: idempotencyDisabled ? String(Date.now()) : undefined,
   });
 
-  const { data: existing } = await supabase
-    .from('notification_jobs')
-    .select('id, status')
-    .eq('idempotency_key', idempotencyKey)
-    .maybeSingle<{ id: string; status: NotificationJobStatus }>();
-  if (existing && existing.status === 'SENT') {
-    return {
-      customerId: args.customerId,
-      channel: args.channel,
-      jobId: existing.id,
-      status: 'SENT',
-      message: '本日同じルールで送信済み（冪等キーヒット）',
-    };
+  if (!idempotencyDisabled) {
+    const { data: existing } = await supabase
+      .from('notification_jobs')
+      .select('id, status')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle<{ id: string; status: NotificationJobStatus }>();
+    if (existing && existing.status === 'SENT') {
+      return {
+        customerId: args.customerId,
+        channel: args.channel,
+        jobId: existing.id,
+        status: 'SENT',
+        message: '本日同じルールで送信済み（冪等キーヒット）',
+      };
+    }
   }
 
   const jobInsert = await supabase

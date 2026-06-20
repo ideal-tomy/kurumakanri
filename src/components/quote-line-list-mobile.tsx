@@ -5,8 +5,10 @@ import type { EditableLine } from '@/lib/quote-editor-utils';
 
 function lineCategoryLabel(row: EditableLine): string {
   if (row.category === 'discount') return '値引き';
-  if (row.category === 'legal') return '法定';
-  return '作業';
+  if (row.category === 'legal') {
+    return row.tax_treatment === 'TAXABLE_10' ? '基本・税込' : '基本';
+  }
+  return '追加';
 }
 
 export function QuoteLineListMobile({

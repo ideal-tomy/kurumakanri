@@ -40,7 +40,7 @@ export default async function TemplatesPage() {
           <code>{'{{bookingUrl}}'}</code> <code>{'{{unsubscribeUrl}}'}</code>
         </div>
         <div style={{ padding: '0 16px 16px', fontSize: 12, color: 'var(--ink-2)' }}>
-          車検系（shaken_* / quote_notify）の既定文面は、顧客向けの<strong>主たる金額を法定概算（{'{{legalFeesTotal}}'}）</strong>にし、詳細リンクは{' '}
+          車検系（shaken_* / quote_notify）の既定文面は、顧客向けの<strong>主たる金額を車検基本費用概算（{'{{legalFeesTotal}}'}）</strong>にし、詳細リンクは{' '}
           <code>{'{{portalUrl}}'}</code> のみです。印刷・PDF はポータル内のボタンから <code>/q/</code> へ遷移します（migration 0016 以降）。
         </div>
       </section>

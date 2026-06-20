@@ -316,7 +316,7 @@ function ReviewSendClientInner() {
               <tr style={{ background: 'var(--surface-2)' }}>
                 <th style={{ textAlign: 'left', padding: 10 }}>顧客</th>
                 <th style={{ textAlign: 'left', padding: 10 }}>
-                  {rule === 'oil_4000km' ? '見積（一式）' : '法定概算'}
+                  {rule === 'oil_4000km' ? '見積（一式）' : '基本費用概算'}
                   <div className="cust-meta" style={{ fontWeight: 400, marginTop: 2 }}>
                     {rule === 'oil_4000km' ? '税込合計' : 'LINE本文と同じ主表示'}
                   </div>
@@ -348,8 +348,8 @@ function ReviewSendClientInner() {
                             </>
                           ) : (
                             <>
-                              <strong>{formatYen(row.quote.tax_summary.non_taxable_subtotal)}</strong>
-                              <div className="cust-meta">法定・手数料（対象外）小計</div>
+                              <strong>{formatYen(row.quote.tax_summary.basic_fees_subtotal)}</strong>
+                              <div className="cust-meta">車検基本費用小計</div>
                               <div className="cust-meta">
                                 一式（税込・参考）{formatYen(row.quote.grand_total)}
                               </div>

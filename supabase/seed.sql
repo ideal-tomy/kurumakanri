@@ -293,10 +293,10 @@ begin
          '[
            {"label": "自賠責保険料（24ヶ月）", "amount": 17650},
            {"label": "重量税（エコカー減税適用）", "amount": 15000},
-           {"label": "印紙代", "amount": 1800}
+           {"label": "印紙代", "amount": 1800},
+           {"label": "24ヶ月点検基本料", "amount": 28000, "quantity": 1, "unit_price": 28000, "tax_treatment": "TAXABLE_10", "category": "legal"}
          ]'::jsonb,
          '[
-           {"label": "24ヶ月点検基本料", "amount": 28000},
            {"label": "ブレーキフルード交換", "amount": 4500},
            {"label": "エンジンオイル交換", "amount": 6200}
          ]'::jsonb,
@@ -388,10 +388,10 @@ select v.id,
        '[
          {"label": "自賠責保険料（24ヶ月）", "amount": 17650},
          {"label": "重量税（エコカー減税適用）", "amount": 15000},
-         {"label": "印紙代", "amount": 1800}
+         {"label": "印紙代", "amount": 1800},
+         {"label": "24ヶ月点検基本料", "amount": 28000, "quantity": 1, "unit_price": 28000, "tax_treatment": "TAXABLE_10", "category": "legal"}
        ]'::jsonb,
        '[
-         {"label": "24ヶ月点検基本料", "amount": 28000},
          {"label": "ブレーキフルード交換", "amount": 4500},
          {"label": "エンジンオイル交換", "amount": 6200}
        ]'::jsonb,
@@ -467,10 +467,10 @@ select v.id,
        '[
          {"label": "自賠責保険料（24ヶ月）", "amount": 17650},
          {"label": "重量税（エコカー減税適用）", "amount": 15000},
-         {"label": "印紙代", "amount": 1800}
+         {"label": "印紙代", "amount": 1800},
+         {"label": "24ヶ月点検基本料", "amount": 28000, "quantity": 1, "unit_price": 28000, "tax_treatment": "TAXABLE_10", "category": "legal"}
        ]'::jsonb,
        '[
-         {"label": "24ヶ月点検基本料", "amount": 28000},
          {"label": "ブレーキフルード交換", "amount": 4500},
          {"label": "エンジンオイル交換", "amount": 6200}
        ]'::jsonb,

@@ -102,7 +102,7 @@ export function PreviewBottomSheet({
     );
   }
 
-  const legalTotal = item?.quote?.tax_summary.non_taxable_subtotal;
+  const basicTotal = item?.quote?.tax_summary.basic_fees_subtotal;
   const grandTotal = item?.quote?.tax_summary.grand_total;
 
   return (
@@ -149,8 +149,8 @@ export function PreviewBottomSheet({
                 <>
                   <div className="preview-sheet-section-title">見積サマリ</div>
                   <div className="preview-summary-row">
-                    <span>法定費用合計</span>
-                    <span style={{ fontWeight: 600 }}>{formatYen(legalTotal ?? 0)}</span>
+                    <span>車検基本費用合計</span>
+                    <span style={{ fontWeight: 600 }}>{formatYen(basicTotal ?? 0)}</span>
                   </div>
                   <div className="preview-summary-row">
                     <span>税込総額</span>

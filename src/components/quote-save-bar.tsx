@@ -3,16 +3,17 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { formatYen } from '@/lib/format';
+import { QUOTE_SECTION_LABEL } from '@/lib/quote';
 
 export function QuoteSaveBar({
-  legalSubtotal,
+  basicFeesSubtotal,
   grandTotal,
   saving,
   disabled,
   quoteLabel,
   onSave,
 }: {
-  legalSubtotal: number;
+  basicFeesSubtotal: number;
   grandTotal: number;
   saving: boolean;
   disabled?: boolean;
@@ -32,8 +33,8 @@ export function QuoteSaveBar({
             <div className="quote-save-bar-editing-label">編集中: {quoteLabel}</div>
           ) : null}
           <div className="quote-save-bar-line">
-            <span className="quote-save-bar-label">法定</span>
-            <span className="quote-save-bar-value-sm">{formatYen(legalSubtotal)}</span>
+            <span className="quote-save-bar-label">{QUOTE_SECTION_LABEL.basic}</span>
+            <span className="quote-save-bar-value-sm">{formatYen(basicFeesSubtotal)}</span>
           </div>
           <div className="quote-save-bar-line quote-save-bar-line-main">
             <span className="quote-save-bar-label">合計</span>

@@ -51,12 +51,14 @@ describe('buildPortalPreviewFromSendItem', () => {
           notes: 'テスト備考',
           legal_lines: [
             { label: '自賠責保険料（24ヶ月）', quantity: 1, unit_price: 17650, amount: 17650 },
+            { label: '24ヶ月点検基本料', quantity: 1, unit_price: 28000, amount: 28000 },
           ],
           service_lines: [
-            { label: '24ヶ月点検基本料', quantity: 1, unit_price: 28000, amount: 28000 },
+            { label: 'ブレーキフルード交換', quantity: 1, unit_price: 4500, amount: 4500 },
           ],
           tax_summary: {
             non_taxable_subtotal: 17650,
+            basic_fees_subtotal: 45650,
             taxable_tax_included: 28000,
             taxable_subtotal_ex_tax: 25455,
             tax_amount_10: 2545,
@@ -68,7 +70,7 @@ describe('buildPortalPreviewFromSendItem', () => {
     );
 
     expect(data.overview.name).toBe('田中 健一');
-    expect(data.latestQuote?.legal_lines).toHaveLength(1);
+    expect(data.latestQuote?.legal_lines).toHaveLength(2);
     expect(data.latestQuote?.service_lines).toHaveLength(1);
     expect(data.latestQuote?.printUrl).toBe('https://example.com/q/token');
     expect(data.latestQuote?.notes).toBe('テスト備考');

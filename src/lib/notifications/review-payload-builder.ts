@@ -5,7 +5,7 @@ import {
   loadActiveTemplate,
 } from '@/lib/dispatcher';
 import { renderTemplate } from '@/lib/template';
-import { quoteTotalsForDisplay } from '@/lib/quote';
+import { quoteTotalsForDisplay, sumLineItemsAmount } from '@/lib/quote';
 import type { CustomerPortalData } from '@/lib/customer-portal-data';
 import type { CustomerOverviewRow, QuoteRow } from '@/lib/supabase/types';
 import { resolveNotificationTemplateKey } from '@/lib/notifications/rule-template';
@@ -35,6 +35,7 @@ export type ReviewPayloadQuoteBlock = {
   service_lines: Array<{ label: string; quantity: number; unit_price: number; amount: number }>;
   tax_summary: {
     non_taxable_subtotal: number;
+    basic_fees_subtotal: number;
     taxable_tax_included: number;
     taxable_subtotal_ex_tax: number;
     tax_amount_10: number;
@@ -190,6 +191,7 @@ export async function buildReviewPayloadItems(
           service_lines: disp.service.map(mapLine),
           tax_summary: {
             non_taxable_subtotal: disp.non_taxable_subtotal,
+            basic_fees_subtotal: sumLineItemsAmount(disp.legal),
             taxable_tax_included: disp.taxable_tax_included,
             taxable_subtotal_ex_tax: disp.taxable_subtotal_ex_tax,
             tax_amount_10: disp.tax_amount_10,

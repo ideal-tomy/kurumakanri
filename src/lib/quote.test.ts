@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutoQuote, computeTotalsFromParts, quoteTotalsForDisplay, quoteTotalsFromLinePayloads } from './quote';
+import { buildAutoQuote, computeTotalsFromParts, normalizeQuoteSections, quoteTotalsForDisplay, quoteTotalsFromLinePayloads } from './quote';
 
 describe('buildAutoQuote', () => {
   it('sums legal and taxable service parts into grand_total', () => {
@@ -14,6 +14,15 @@ describe('buildAutoQuote', () => {
     const r = buildAutoQuote({});
     const hasOil = r.service_items.some((i) => i.label.includes('オイル'));
     expect(hasOil).toBe(false);
+  });
+
+  it('puts 24-month inspection in basic fees (legal_items)', () => {
+    const r = buildAutoQuote({});
+    const inBasic = r.legal_items.some((i) => i.label.includes('24ヶ月点検'));
+    const inAdditional = r.service_items.some((i) => i.label.includes('24ヶ月点検'));
+    expect(inBasic).toBe(true);
+    expect(inAdditional).toBe(false);
+    expect(r.legal_items.find((i) => i.label.includes('24ヶ月点検'))?.tax_treatment).toBe('TAXABLE_10');
   });
 
   it('includes oil change only when includeOilChange is explicitly true', () => {
@@ -46,6 +55,17 @@ describe('quoteTotalsForDisplay', () => {
     });
     expect(d.grand_total).toBe(21000);
     expect(d.non_taxable_subtotal).toBe(10000);
+  });
+});
+
+describe('normalizeQuoteSections', () => {
+  it('moves 24-month inspection from service to legal for legacy quotes', () => {
+    const legal = [{ label: '自賠責', amount: 17650, quantity: 1, unit_price: 17650, tax_treatment: 'NON_TAXABLE' as const, category: 'legal' as const }];
+    const service = [{ label: '24ヶ月点検基本料', amount: 28000, quantity: 1, unit_price: 28000, tax_treatment: 'TAXABLE_10' as const, category: 'service' as const }];
+    const n = normalizeQuoteSections(legal, service);
+    expect(n.legal_items).toHaveLength(2);
+    expect(n.service_items).toHaveLength(0);
+    expect(n.legal_items[1]?.category).toBe('legal');
   });
 });
 

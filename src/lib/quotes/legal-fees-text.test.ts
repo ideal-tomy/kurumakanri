@@ -15,17 +15,17 @@ const NON_TAX = (label: string, amount: number): QuoteLineItem => ({
   category: 'legal',
 });
 
-const TAX10 = (label: string, amount: number): QuoteLineItem => ({
+const TAX10_LEGAL = (label: string, amount: number): QuoteLineItem => ({
   label,
   amount,
   quantity: 1,
   unit_price: amount,
   tax_treatment: 'TAXABLE_10',
-  category: 'service',
+  category: 'legal',
 });
 
 describe('buildLegalFeesTextFromItems', () => {
-  it('formats non-taxable legal items with comma-separated yen', () => {
+  it('formats basic fee items with comma-separated yen', () => {
     const r = buildLegalFeesTextFromItems([
       NON_TAX('自動車重量税', 24600),
       NON_TAX('自賠責保険24ヶ月', 17650),
@@ -38,18 +38,18 @@ describe('buildLegalFeesTextFromItems', () => {
     );
   });
 
-  it('drops taxable lines from breakdown and total', () => {
+  it('includes taxable basic fee lines (e.g. 24-month inspection)', () => {
     const r = buildLegalFeesTextFromItems([
       NON_TAX('自動車重量税', 24600),
-      TAX10('オイル交換', 6200),
+      TAX10_LEGAL('24ヶ月点検基本料', 28000),
     ]);
-    expect(r.total).toBe(24600);
-    expect(r.lines).toHaveLength(1);
-    expect(r.breakdown).toBe('・自動車重量税：¥24,600');
+    expect(r.total).toBe(52600);
+    expect(r.lines).toHaveLength(2);
+    expect(r.breakdown).toContain('24ヶ月点検基本料');
   });
 
-  it('returns zero/empty when no legal lines', () => {
-    const r = buildLegalFeesTextFromItems([TAX10('オイル交換', 6200)]);
+  it('returns zero/empty when no lines', () => {
+    const r = buildLegalFeesTextFromItems([]);
     expect(r.total).toBe(0);
     expect(r.totalFormatted).toBe('0');
     expect(r.breakdown).toBe('');
@@ -72,5 +72,14 @@ describe('buildLegalFeesTextFromQuote', () => {
     const fallback = buildLegalFeesTextFallback();
     expect(empty.total).toBe(fallback.total);
     expect(empty.breakdown).toBe(fallback.breakdown);
+    expect(fallback.breakdown).toContain('24ヶ月点検基本料');
+  });
+
+  it('includes 24-month line moved from legacy service_items', () => {
+    const legal = [{ label: '自賠責', amount: 17650, quantity: 1, unit_price: 17650, tax_treatment: 'NON_TAXABLE', category: 'legal' }];
+    const service = [{ label: '24ヶ月点検基本料', amount: 28000, quantity: 1, unit_price: 28000, tax_treatment: 'TAXABLE_10', category: 'service' }];
+    const r = buildLegalFeesTextFromQuote(legal, service);
+    expect(r.total).toBe(45650);
+    expect(r.breakdown).toContain('24ヶ月点検基本料');
   });
 });

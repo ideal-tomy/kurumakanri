@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatDate, formatYen } from '@/lib/format';
+import { QUOTE_SECTION_LABEL } from '@/lib/quote';
 import type { CustomerPortalQuoteSummary } from '@/lib/customer-portal-data';
 
 export function PortalQuoteCard({
@@ -33,7 +34,7 @@ export function PortalQuoteCard({
 
       {quote.legal_lines.length > 0 ? (
         <>
-          <div className="quote-section-label">法定費用</div>
+          <div className="quote-section-label">{QUOTE_SECTION_LABEL.basic}</div>
           {quote.legal_lines.map((line, i) => (
             <div className="quote-row" key={`legal-${i}`}>
               <span className="quote-row-label">{line.label}</span>
@@ -45,7 +46,7 @@ export function PortalQuoteCard({
 
       {quote.service_lines.length > 0 ? (
         <>
-          <div className="quote-section-label">整備費用</div>
+          <div className="quote-section-label">{QUOTE_SECTION_LABEL.additional}</div>
           {quote.service_lines.map((line, i) => (
             <div className="quote-row" key={`svc-${i}`}>
               <span className="quote-row-label">{line.label}</span>

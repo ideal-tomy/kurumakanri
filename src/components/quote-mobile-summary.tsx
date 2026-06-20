@@ -2,21 +2,22 @@
 
 import { Badge } from '@/components/badge';
 import { formatYen } from '@/lib/format';
+import { QUOTE_SECTION_LABEL } from '@/lib/quote';
 import type { QuoteRow } from '@/lib/supabase/types';
 
 export function QuoteMobileSummary({
   quoteNo,
   status,
-  legalSubtotal,
+  basicFeesSubtotal,
+  additionalSubtotal,
   grandTotal,
-  serviceTaxIncluded,
   isDirty,
 }: {
   quoteNo: string | null;
   status: QuoteRow['status'];
-  legalSubtotal: number;
+  basicFeesSubtotal: number;
+  additionalSubtotal?: number;
   grandTotal: number;
-  serviceTaxIncluded?: number;
   isDirty?: boolean;
 }) {
   return (
@@ -28,13 +29,13 @@ export function QuoteMobileSummary({
       </div>
       <div className="quote-mobile-summary-rows">
         <div className="quote-mobile-summary-row">
-          <span className="quote-mobile-summary-row-label">法定費用（対象外）</span>
-          <span className="quote-mobile-summary-row-value">{formatYen(legalSubtotal)}</span>
+          <span className="quote-mobile-summary-row-label">{QUOTE_SECTION_LABEL.basic}</span>
+          <span className="quote-mobile-summary-row-value">{formatYen(basicFeesSubtotal)}</span>
         </div>
-        {typeof serviceTaxIncluded === 'number' && serviceTaxIncluded !== 0 ? (
+        {typeof additionalSubtotal === 'number' && additionalSubtotal !== 0 ? (
           <div className="quote-mobile-summary-row quote-mobile-summary-row-sub">
-            <span className="quote-mobile-summary-row-label">作業等（税込）</span>
-            <span className="quote-mobile-summary-row-value">{formatYen(serviceTaxIncluded)}</span>
+            <span className="quote-mobile-summary-row-label">{QUOTE_SECTION_LABEL.additional}</span>
+            <span className="quote-mobile-summary-row-value">{formatYen(additionalSubtotal)}</span>
           </div>
         ) : null}
         <div className="quote-mobile-summary-row quote-mobile-summary-row-total">

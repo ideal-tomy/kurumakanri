@@ -1,4 +1,4 @@
-import { rowsFromStoredJson, type QuoteLineItem } from '@/lib/quote';
+import { rowsFromStoredJson, normalizeQuoteSections, type QuoteLineItem } from '@/lib/quote';
 
 export type EditableLine = {
   id: string;
@@ -11,8 +11,12 @@ export type EditableLine = {
 
 export function toEditable(json: unknown, prefix: string): EditableLine[] {
   const rows = rowsFromStoredJson(json);
-  return rows.map((r, i) => ({
-    id: `${prefix}-${i}-${r.label}`,
+  return rows.map((r, i) => editableLineFromItem(r, `${prefix}-${i}-${r.label}`));
+}
+
+function editableLineFromItem(r: QuoteLineItem, id: string): EditableLine {
+  return {
+    id,
     label: r.label,
     quantity: r.quantity,
     unit_price: r.unit_price,
@@ -23,7 +27,19 @@ export function toEditable(json: unknown, prefix: string): EditableLine[] {
         : r.category === 'legal' || r.tax_treatment === 'NON_TAXABLE'
           ? 'legal'
           : 'service',
-  }));
+  };
+}
+
+/** 旧データ互換の正規化込みで編集用行を生成 */
+export function initEditableSections(legalJson: unknown, serviceJson: unknown) {
+  const { legal_items, service_items } = normalizeQuoteSections(
+    rowsFromStoredJson(legalJson),
+    rowsFromStoredJson(serviceJson),
+  );
+  return {
+    legalLines: legal_items.map((r, i) => editableLineFromItem(r, `leg-${i}-${r.label}`)),
+    serviceLines: service_items.map((r, i) => editableLineFromItem(r, `svc-${i}-${r.label}`)),
+  };
 }
 
 export function toPayload(lines: EditableLine[]): QuoteLineItem[] {

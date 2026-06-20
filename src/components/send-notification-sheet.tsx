@@ -138,7 +138,7 @@ export function SendNotificationSheet({
     }
   }
 
-  const legalTotal = item?.quote?.tax_summary.non_taxable_subtotal;
+  const basicTotal = item?.quote?.tax_summary.basic_fees_subtotal;
   const grandTotal = item?.quote?.tax_summary.grand_total;
   const isOilRule = rule === 'oil_4000km';
   const canSend =
@@ -198,8 +198,8 @@ export function SendNotificationSheet({
             {!isOilRule && item.quote ? (
               <>
                 <div className="preview-summary-row">
-                  <span>法定費用合計</span>
-                  <span style={{ fontWeight: 600 }}>{formatYen(legalTotal ?? 0)}</span>
+                  <span>車検基本費用合計</span>
+                  <span style={{ fontWeight: 600 }}>{formatYen(basicTotal ?? 0)}</span>
                 </div>
                 <div className="preview-summary-row">
                   <span>税込総額</span>
@@ -215,14 +215,14 @@ export function SendNotificationSheet({
                 </button>
                 {breakdown && (
                   <div style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>法定行</div>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>車検基本費用</div>
                     {item.quote.legal_lines.map((l, i) => (
                       <div key={`${l.label}-${i}`} className="preview-summary-row" style={{ fontSize: 13 }}>
                         <span>{l.label}</span>
                         <span>{formatYen(l.amount)}</span>
                       </div>
                     ))}
-                    <div style={{ fontWeight: 600, margin: '10px 0 6px' }}>サービス行</div>
+                    <div style={{ fontWeight: 600, margin: '10px 0 6px' }}>追加整備</div>
                     {item.quote.service_lines.map((l, i) => (
                       <div key={`${l.label}-${i}`} className="preview-summary-row" style={{ fontSize: 13 }}>
                         <span>{l.label}</span>
@@ -239,8 +239,8 @@ export function SendNotificationSheet({
             ) : item.quote ? (
               <>
                 <div className="preview-summary-row">
-                  <span>法定費用合計</span>
-                  <span style={{ fontWeight: 600 }}>{formatYen(legalTotal ?? 0)}</span>
+                  <span>車検基本費用合計</span>
+                  <span style={{ fontWeight: 600 }}>{formatYen(basicTotal ?? 0)}</span>
                 </div>
                 <div className="preview-summary-row">
                   <span>税込総額</span>
