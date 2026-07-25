@@ -4,22 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const MOBILE_MAX_PX = 1100;
 import { formatDate, formatYen } from '@/lib/format';
-import { quoteTotalsForDisplay, rowsFromStoredJson } from '@/lib/quote';
+import { quoteGrandTotalFromLines } from '@/lib/quote';
 import type { QuoteRow } from '@/lib/supabase/types';
 import { QuoteEditorCard } from './quote-editor-card';
 
 function quoteGrandTotal(q: QuoteRow): number {
-  const legal = rowsFromStoredJson(q.legal_items);
-  const service = rowsFromStoredJson(q.service_items);
-  return quoteTotalsForDisplay({
-    legal_items: legal,
-    service_items: service,
-    taxable_subtotal_ex_tax: null,
-    tax_amount_10: null,
-    non_taxable_subtotal: null,
-    grand_total: null,
-    total_amount: 0,
-  }).grand_total;
+  return quoteGrandTotalFromLines(q);
 }
 
 export function QuoteQuotesList({

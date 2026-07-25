@@ -167,7 +167,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
           <header className="panel-header">
             <div className="panel-title">整備履歴</div>
           </header>
-          <HistoriesBlock histories={histories} />
+          <HistoriesBlock customerId={customer.id} vehicles={vehicles} histories={histories} />
         </section>
 
         {primaryVehicle ? (
@@ -224,7 +224,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
           <summary className="accordion-summary">
             <span className="accordion-summary-title">整備履歴</span>
           </summary>
-          <HistoriesBlock histories={histories} />
+          <HistoriesBlock customerId={customer.id} vehicles={vehicles} histories={histories} />
         </details>
       </div>
 

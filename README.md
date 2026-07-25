@@ -159,12 +159,16 @@ select public.is_active_staff();
 
 - [要件定義.md](要件定義.md)
 - [技術要件.md](技術要件.md)
-- `docs/account-checklist.md` … クライアント側アカウント準備（1ページ）
+- `docs/プロダクト認識と理想UIUX.md` … **何のためのアプリか・理想UIUX・オーナー週次シナリオ（実装の北極星）**
+- `docs/本番環境構築ガイド.md` … 本番構築の統合ガイド（アカウント準備・環境変数・切替・GO判定）
+- `docs/本番前テストPLAN.md` … 本番前の機能チェック・テスト手順
+- `docs/UIUXフェーズD実行チェックリスト.md` … UI/UX フェーズ D の詳細実行手順
+- `docs/UIUX修正点まとめ.md` … フェーズ D の発見事項と処置方針
+- `docs/改善実行PLAN.md` … UI/UX 改善の実装バッチ順
 - `docs/acceptance-checklist.md` … 受入会チェックリスト
 - `docs/verification-report.md` … 開発側事前確認ログ
 - `docs/weekly-ops-runbook.md` … 週次運用手順
 - `docs/incident-escalation-flow.md` … 障害時対応フロー
-- `docs/production-rehearsal-checklist.md` … 本番移行リハーサル手順
 
 ## `files/` からの取り込み方針
 

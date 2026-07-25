@@ -27,7 +27,7 @@ export function CustomerPortalView({
   preview?: boolean;
 }) {
   const { overview, histories, latestQuote } = data;
-  const issuer = preview ? null : parseIssuerFromEnv();
+  const issuer = parseIssuerFromEnv();
 
   const estimated =
     overview.estimated_mileage ??
@@ -45,6 +45,9 @@ export function CustomerPortalView({
       <div className="portal-content">
         <div className="phone-header">
           <div>
+            {issuer?.companyName ? (
+              <div className="phone-shop-name">{issuer.companyName}</div>
+            ) : null}
             <div className="phone-greeting-label">こんにちは</div>
             <div className="phone-greeting-name">{overview.name} さん</div>
           </div>

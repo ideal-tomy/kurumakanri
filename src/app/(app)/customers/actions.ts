@@ -264,3 +264,96 @@ export async function updateConsentAction(customerId: string, formData: FormData
 
   revalidatePath(`/customers/${customerId}`);
 }
+
+const SERVICE_HISTORY_KIND_TITLES: Record<string, string> = {
+  shaken: '車検',
+  inspection_12: '12ヶ月点検',
+  oil: 'オイル交換',
+  tire: 'タイヤ交換',
+  battery: 'バッテリー交換',
+  repair: '修理',
+  other: '',
+};
+
+export async function createServiceHistoryAction(customerId: string, formData: FormData) {
+  const ctx = await requireStaff();
+  const supabase = getServerSupabase();
+
+  const vehicleId = nullable(formData.get('vehicle_id'));
+  if (!vehicleId) throw new Error('車両を選択してください');
+
+  const kind = nullable(formData.get('kind')) ?? 'other';
+  const performedAt = nullable(formData.get('performed_at'));
+  if (!performedAt) throw new Error('実施日は必須です');
+
+  let title = nullable(formData.get('title'));
+  if (!title) {
+    title = SERVICE_HISTORY_KIND_TITLES[kind] || null;
+  }
+  if (!title) throw new Error('タイトルは必須です');
+
+  const mileageRaw = nullable(formData.get('mileage'));
+  const mileage =
+    mileageRaw != null && mileageRaw !== ''
+      ? z.coerce.number().int().nonnegative().parse(mileageRaw)
+      : null;
+  const notes = nullable(formData.get('notes'));
+
+  const { data: vehicle, error: vehicleErr } = await supabase
+    .from('vehicles')
+    .select('id, customer_id')
+    .eq('id', vehicleId)
+    .maybeSingle<{ id: string; customer_id: string }>();
+  if (vehicleErr) throw new Error(vehicleErr.message);
+  if (!vehicle || vehicle.customer_id !== customerId) {
+    throw new Error('指定された車両はこの顧客に属していません');
+  }
+
+  if (kind === 'shaken') {
+    const nextExpire = nullable(formData.get('inspection_expire_date'));
+    if (!nextExpire) throw new Error('車検登録時は次回車検満了日が必須です');
+  }
+
+  const { data: inserted, error } = await supabase
+    .from('service_histories')
+    .insert({
+      vehicle_id: vehicleId,
+      title,
+      performed_at: performedAt,
+      mileage,
+      notes,
+    })
+    .select('id')
+    .single<{ id: string }>();
+  if (error || !inserted) throw new Error(error?.message ?? '整備履歴の登録に失敗しました');
+
+  if (kind === 'oil') {
+    const oilUpdate: { last_oil_change_at: string; last_oil_change_mileage?: number } = {
+      last_oil_change_at: performedAt,
+    };
+    if (mileage != null) oilUpdate.last_oil_change_mileage = mileage;
+    const { error: oilErr } = await supabase.from('vehicles').update(oilUpdate).eq('id', vehicleId);
+    if (oilErr) throw new Error(oilErr.message);
+  }
+
+  if (kind === 'shaken') {
+    const nextExpire = nullable(formData.get('inspection_expire_date'));
+    if (nextExpire) {
+      const { error: shakenErr } = await supabase
+        .from('vehicles')
+        .update({ inspection_expire_date: nextExpire })
+        .eq('id', vehicleId);
+      if (shakenErr) throw new Error(shakenErr.message);
+    }
+  }
+
+  await writeAudit({
+    userId: ctx.userId,
+    action: 'service_history.create',
+    resource: 'service_histories',
+    resourceId: inserted.id,
+    payload: { customerId, vehicleId, kind, title, performedAt },
+  });
+
+  revalidatePath(`/customers/${customerId}`);
+}

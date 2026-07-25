@@ -11,27 +11,40 @@ import type { NotificationJobRow, NotificationLogRow } from '@/lib/supabase/type
 type RowItem = NotificationJobRow & {
   customers: { name: string; email: string | null; line_user_id: string | null };
   logs: Pick<NotificationLogRow, 'id' | 'result' | 'sent_at' | 'provider_message_id' | 'error_message'>[];
+  /** 同種の後続 SENT があり、要対応ではない過去失敗 */
+  failureResolved?: boolean;
 };
 
 function retryHint(rawError: string | null | undefined): string {
   const e = (rawError ?? '').toUpperCase();
   if (!e) return '-';
-  if (e.includes('NO_LINE_USER_ID')) return 'LINE未紐付。顧客に友だち追加/紐付け依頼後に再送';
+  if (e.includes('NO_LINE_USER_ID') || e.includes('LINE USERID') || e.includes('友だち追加')) {
+    return 'LINE未紐付。顧客に友だち追加/紐付け依頼後に再送';
+  }
   if (e.includes('MISSING_LINE_ACCESS_TOKEN')) return '環境変数不足。管理者へ連絡';
-  if (e.includes('HTTP_401') || e.includes('HTTP_403')) return '認証/権限エラー。管理者へ連絡してトークン再設定';
+  if (e.includes('HTTP_401') || e.includes('HTTP_403') || e.includes('AUTHENTICATION FAILED')) {
+    return '認証/権限エラー。管理者へ連絡してトークン再設定';
+  }
   if (e.includes('HTTP_429')) return 'レート制限。時間を空けて再送';
   if (e.includes('NETWORK')) return '一時通信エラー。5分後に再送';
   return '再送で改善しない場合は管理者へ連絡';
 }
 
-function logsListHref(basePath: string, p: { status?: string; channel?: string }): string {
+function logsListHref(
+  basePath: string,
+  p: { status?: string; channel?: string; unresolved?: string },
+): string {
   const sp = new URLSearchParams();
   if (p.status) sp.set('status', p.status);
-  if (p.channel) {
-    sp.set('channel', p.channel);
-  }
+  if (p.channel) sp.set('channel', p.channel);
+  if (p.unresolved) sp.set('unresolved', p.unresolved);
   const q = sp.toString();
   return q ? `${basePath}?${q}` : basePath;
+}
+
+function latestLog(logs: RowItem['logs']) {
+  if (logs.length === 0) return undefined;
+  return [...logs].sort((a, b) => Date.parse(b.sent_at) - Date.parse(a.sent_at))[0];
 }
 
 export function LogsTable({
@@ -41,7 +54,7 @@ export function LogsTable({
   homeHref = '/',
 }: {
   rows: RowItem[];
-  initial: { status?: string; channel?: string; q?: string };
+  initial: { status?: string; channel?: string; q?: string; unresolved?: string };
   /** 一覧・フィルタのベースURL（旧 /notifications/logs） */
   basePath?: string;
   /** モバイル「新規送付」導線 */
@@ -66,6 +79,7 @@ export function LogsTable({
     if (status) sp.set('status', status);
     if (channel) sp.set('channel', channel);
     if (q) sp.set('q', q);
+    if (initial.unresolved === '1' && status === 'FAILED') sp.set('unresolved', '1');
     router.push(`${basePath}?${sp.toString()}`);
   }
 
@@ -103,7 +117,19 @@ export function LogsTable({
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.show('再送をリクエストしました');
+      const json = (await res.json()) as {
+        results?: { status: string }[];
+      };
+      const results = json.results ?? [];
+      const sent = results.filter((r) => r.status === 'SENT').length;
+      const failed = results.filter((r) => r.status === 'FAILED').length;
+      if (sent > 0 && failed === 0) {
+        toast.show(`再送成功 ${sent}件（過去の失敗履歴は残ります）`);
+      } else if (sent > 0) {
+        toast.show(`再送: 成功 ${sent}件 / 失敗 ${failed}件`);
+      } else {
+        toast.show(failed > 0 ? `再送失敗 ${failed}件` : '再送をリクエストしました');
+      }
       setSelected(new Set());
       router.refresh();
     } catch (e) {
@@ -120,6 +146,8 @@ export function LogsTable({
   function retryOne(id: string, channelOverride?: 'LINE' | 'MAIL') {
     void retryJobs([id], channelOverride);
   }
+
+  const unresolvedFilterActive = initial.unresolved === '1';
 
   return (
     <section className="panel">
@@ -155,28 +183,55 @@ export function LogsTable({
 
       <div className="logs-mobile-intro mobile-only">
         <p className="logs-mobile-intro-text">
-          失敗行は<strong>再送</strong>できます。新規送付はホームの通知リストから。
+          未解消の失敗だけ要対応です。過去の失敗履歴は残ります。新規の案内は
+          <Link href={homeHref} className="logs-mobile-home-link">
+            ホーム
+          </Link>
+          から。
         </p>
-        <Link href={homeHref} className="btn btn-primary logs-mobile-cta">
-          ホーム（通知リスト）へ
-        </Link>
         <div className="logs-mobile-filter-chips">
-          <a className={`logs-chip ${!initial.status ? 'active' : ''}`} href={basePath}>
+          <a className={`logs-chip ${!initial.status && !unresolvedFilterActive ? 'active' : ''}`} href={basePath}>
             すべて
           </a>
           <a
-            className={`logs-chip ${initial.status === 'FAILED' ? 'active' : ''}`}
-            href={`${basePath}?status=FAILED`}
+            className={`logs-chip ${unresolvedFilterActive ? 'active' : ''}`}
+            href={logsListHref(basePath, { status: 'FAILED', unresolved: '1' })}
           >
-            失敗のみ
+            要対応の失敗
           </a>
-          <a className={`logs-chip ${!initial.channel ? 'active' : ''}`} href={logsListHref(basePath, { status: initial.status })}>
+          <a
+            className={`logs-chip ${initial.status === 'FAILED' && !unresolvedFilterActive ? 'active' : ''}`}
+            href={logsListHref(basePath, { status: 'FAILED' })}
+          >
+            失敗履歴
+          </a>
+          <a
+            className={`logs-chip ${!initial.channel ? 'active' : ''}`}
+            href={logsListHref(basePath, {
+              status: initial.status,
+              unresolved: unresolvedFilterActive ? '1' : undefined,
+            })}
+          >
             全チャネル
           </a>
-          <a className={`logs-chip ${initial.channel === 'LINE' ? 'active' : ''}`} href={logsListHref(basePath, { status: initial.status, channel: 'LINE' })}>
+          <a
+            className={`logs-chip ${initial.channel === 'LINE' ? 'active' : ''}`}
+            href={logsListHref(basePath, {
+              status: initial.status,
+              channel: 'LINE',
+              unresolved: unresolvedFilterActive ? '1' : undefined,
+            })}
+          >
             LINE
           </a>
-          <a className={`logs-chip ${initial.channel === 'MAIL' ? 'active' : ''}`} href={logsListHref(basePath, { status: initial.status, channel: 'MAIL' })}>
+          <a
+            className={`logs-chip ${initial.channel === 'MAIL' ? 'active' : ''}`}
+            href={logsListHref(basePath, {
+              status: initial.status,
+              channel: 'MAIL',
+              unresolved: unresolvedFilterActive ? '1' : undefined,
+            })}
+          >
             メール
           </a>
         </div>
@@ -206,9 +261,22 @@ export function LogsTable({
               </tr>
             ) : (
               filtered.map((r) => {
-                const lastLog = r.logs[0];
+                const lastLog = latestLog(r.logs);
+                const resolved = Boolean(r.failureResolved && r.status === 'FAILED');
+                const err =
+                  r.status === 'SENT'
+                    ? null
+                    : resolved
+                      ? r.last_error ?? lastLog?.error_message ?? null
+                      : r.last_error ?? lastLog?.error_message ?? null;
+                const resultLabel =
+                  r.status === 'SENT'
+                    ? (lastLog?.result === 'SUCCESS' || !lastLog?.result ? 'SUCCESS' : lastLog.result)
+                    : resolved
+                      ? '解消済'
+                      : (lastLog?.result ?? '-');
                 return (
-                  <tr key={r.id}>
+                  <tr key={r.id} className={resolved ? 'logs-row-resolved' : undefined}>
                     <td>
                       <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                     </td>
@@ -223,25 +291,34 @@ export function LogsTable({
                         variant={
                           r.status === 'SENT'
                             ? 'success'
-                            : r.status === 'FAILED'
-                              ? 'danger'
-                              : r.status === 'CANCELLED'
-                                ? 'warn'
-                                : 'neutral'
+                            : resolved
+                              ? 'neutral'
+                              : r.status === 'FAILED'
+                                ? 'danger'
+                                : r.status === 'CANCELLED'
+                                  ? 'warn'
+                                  : 'neutral'
                         }
                       >
-                        {r.status}
+                        {resolved ? 'FAILED（解消済）' : r.status}
                       </Badge>
                     </td>
-                    <td>{lastLog?.result ?? '-'}</td>
+                    <td>{resultLabel}</td>
                     <td style={{ maxWidth: 280 }}>
-                      <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {r.last_error ?? lastLog?.error_message ?? '-'}
-                      </span>
+                      {resolved ? (
+                        <span className="logs-resolved-note">
+                          過去の失敗（その後の再送で成功）
+                          {err ? <span className="logs-resolved-detail"> — {err}</span> : null}
+                        </span>
+                      ) : r.status === 'SENT' ? (
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>-</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{err ?? '-'}</span>
+                      )}
                     </td>
                     <td style={{ maxWidth: 280 }}>
                       <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {retryHint(r.last_error ?? lastLog?.error_message)}
+                        {resolved ? '要対応ではありません' : retryHint(err)}
                       </span>
                     </td>
                   </tr>
@@ -259,11 +336,24 @@ export function LogsTable({
           </li>
         ) : (
           filtered.map((r) => {
-            const lastLog = r.logs[0];
-            const err = r.last_error ?? lastLog?.error_message ?? null;
-            const canRetry = r.status === 'FAILED';
+            const lastLog = latestLog(r.logs);
+            const resolved = Boolean(r.failureResolved && r.status === 'FAILED');
+            const err =
+              r.status === 'SENT'
+                ? null
+                : r.last_error ?? lastLog?.error_message ?? null;
+            const canRetry = r.status === 'FAILED' && !resolved;
+            const resultLabel =
+              r.status === 'SENT'
+                ? (lastLog?.result === 'SUCCESS' || !lastLog?.result ? 'SUCCESS' : lastLog.result)
+                : resolved
+                  ? '解消済'
+                  : (lastLog?.result ?? '—');
             return (
-              <li key={r.id} className="logs-mobile-card">
+              <li
+                key={r.id}
+                className={`logs-mobile-card${resolved ? ' logs-mobile-card-resolved' : ''}`}
+              >
                 <label className="logs-mobile-card-head">
                   <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="logs-mobile-check" />
                   <span className="logs-mobile-name">{r.customers.name}</span>
@@ -275,27 +365,33 @@ export function LogsTable({
                     variant={
                       r.status === 'SENT'
                         ? 'success'
-                        : r.status === 'FAILED'
-                          ? 'danger'
-                          : r.status === 'CANCELLED'
-                            ? 'warn'
-                            : 'neutral'
+                        : resolved
+                          ? 'neutral'
+                          : r.status === 'FAILED'
+                            ? 'danger'
+                            : r.status === 'CANCELLED'
+                              ? 'warn'
+                              : 'neutral'
                     }
                   >
-                    {r.status}
+                    {resolved ? 'FAILED（解消済）' : r.status}
                   </Badge>
-                  <span className="logs-mobile-result">{lastLog?.result ?? '—'}</span>
+                  <span className="logs-mobile-result">{resultLabel}</span>
                 </div>
                 <div className="logs-mobile-template">{r.template_key}</div>
-                {(err || r.status === 'FAILED') && (
+                {resolved ? (
+                  <div className="logs-mobile-resolved">
+                    <span className="logs-mobile-resolved-label">過去の失敗</span>
+                    その後の再送で成功しています（要対応ではありません）
+                    {err ? <div className="logs-mobile-resolved-detail">{err}</div> : null}
+                  </div>
+                ) : r.status === 'FAILED' || err ? (
                   <div className="logs-mobile-error">
                     <span className="logs-mobile-error-label">エラー</span>
                     {err ?? '—'}
                   </div>
-                )}
-                {r.status === 'FAILED' && (
-                  <div className="logs-mobile-hint">{retryHint(err)}</div>
-                )}
+                ) : null}
+                {canRetry ? <div className="logs-mobile-hint">{retryHint(err)}</div> : null}
                 {canRetry && (
                   <div className="logs-mobile-actions">
                     <button

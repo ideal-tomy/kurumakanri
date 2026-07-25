@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { Badge, priorityVariant } from '@/components/badge';
 import { upsertVehicleAction } from '@/app/(app)/customers/actions';
+import { ServiceHistoryForm } from '@/components/service-history-form';
 import { formatDate, formatKm, formatYen, priorityLabel } from '@/lib/format';
 import { computeEstimatedMileage, daysUntil } from '@/lib/mileage';
+import { quoteGrandTotalFromLines } from '@/lib/quote';
 import type {
   ConsentRow,
   CustomerRow,
@@ -10,6 +12,11 @@ import type {
   ServiceHistoryRow,
   VehicleRow,
 } from '@/lib/supabase/types';
+
+function shortQuoteNo(quoteNo: string): string {
+  if (quoteNo.length <= 16) return quoteNo;
+  return `${quoteNo.slice(0, 8)}…${quoteNo.slice(-6)}`;
+}
 
 export function CustomerSummaryStrip({
   customer,
@@ -173,35 +180,76 @@ export function VehiclesBlock({
 }
 
 export function QuotesBlock({ customerId, quotes }: { customerId: string; quotes: QuoteRow[] }) {
+  const list = quotes.slice(0, 5);
+
   return (
-    <div style={{ padding: 20 }}>
-      {quotes.length === 0 ? (
+    <div className="quotes-block">
+      {list.length === 0 ? (
         <div className="empty">まだ見積がありません</div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>見積No.</th>
-              <th>状態</th>
-              <th>合計</th>
-              <th>有効期限</th>
-            </tr>
-          </thead>
-          <tbody>
-            {quotes.slice(0, 5).map((q) => (
-              <tr key={q.id}>
-                <td>{q.quote_no ?? '-'}</td>
-                <td>
-                  <Badge variant="info">{q.status}</Badge>
-                </td>
-                <td>{formatYen(q.total_amount)}</td>
-                <td>{formatDate(q.valid_until)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <ul className="quotes-block-list mobile-only">
+            {list.map((q) => {
+              const total = quoteGrandTotalFromLines(q);
+              const no = q.quote_no ?? '見積';
+              return (
+                <li key={q.id}>
+                  <Link href={`/quotes/${q.vehicle_id}`} className="quotes-block-row">
+                    <div className="quotes-block-row-main">
+                      <span className="quotes-block-no" title={q.quote_no ?? undefined}>
+                        {shortQuoteNo(no)}
+                      </span>
+                      <Badge variant="info">{q.status}</Badge>
+                    </div>
+                    <div className="quotes-block-row-meta">
+                      <span className="quotes-block-total">{formatYen(total)}</span>
+                      <span className="quotes-block-valid">有効 {formatDate(q.valid_until)}</span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="table-wrap desktop-only">
+            <table>
+              <thead>
+                <tr>
+                  <th>見積No.</th>
+                  <th>状態</th>
+                  <th>合計</th>
+                  <th>有効期限</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((q) => {
+                  const total = quoteGrandTotalFromLines(q);
+                  const no = q.quote_no ?? '-';
+                  return (
+                    <tr key={q.id}>
+                      <td>
+                        <Link
+                          className="panel-link"
+                          href={`/quotes/${q.vehicle_id}`}
+                          title={q.quote_no ?? undefined}
+                        >
+                          {shortQuoteNo(no === '-' ? '見積' : no)}
+                        </Link>
+                      </td>
+                      <td>
+                        <Badge variant="info">{q.status}</Badge>
+                      </td>
+                      <td>{formatYen(total)}</td>
+                      <td>{formatDate(q.valid_until)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
-      <div style={{ marginTop: 12 }}>
+      <div className="quotes-block-footer">
         <Link className="panel-link" href={`/quotes/by-customer/${customerId}`}>
           見積一覧へ →
         </Link>
@@ -210,31 +258,43 @@ export function QuotesBlock({ customerId, quotes }: { customerId: string; quotes
   );
 }
 
-export function HistoriesBlock({ histories }: { histories: ServiceHistoryRow[] }) {
+export function HistoriesBlock({
+  customerId,
+  vehicles,
+  histories,
+}: {
+  customerId: string;
+  vehicles: VehicleRow[];
+  histories: ServiceHistoryRow[];
+}) {
   return (
-    <div style={{ padding: 20 }}>
+    <div className="histories-block">
       {histories.length === 0 ? (
         <div className="empty">履歴がありません</div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>日付</th>
-              <th>内容</th>
-              <th>走行距離</th>
-            </tr>
-          </thead>
-          <tbody>
-            {histories.map((h) => (
-              <tr key={h.id}>
-                <td>{formatDate(h.performed_at)}</td>
-                <td>{h.title}</td>
-                <td>{formatKm(h.mileage)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="histories-list">
+          {histories.map((h) => (
+            <li key={h.id}>
+              <details className="history-item-details">
+                <summary className="history-item-summary">
+                  <span className="history-item-summary-main">
+                    {formatDate(h.performed_at)} · {h.title}
+                  </span>
+                  <span className="history-item-summary-sub">{formatKm(h.mileage)}</span>
+                </summary>
+                <div className="history-item-body">
+                  {h.notes?.trim() ? h.notes : <span className="cust-meta">メモなし</span>}
+                </div>
+              </details>
+            </li>
+          ))}
+        </ul>
       )}
+
+      <details className="history-add-details">
+        <summary className="history-add-summary">＋ 履歴を追加</summary>
+        <ServiceHistoryForm customerId={customerId} vehicles={vehicles} />
+      </details>
     </div>
   );
 }

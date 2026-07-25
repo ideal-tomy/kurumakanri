@@ -261,6 +261,19 @@ export function quoteTotalsForDisplay(quote: {
   };
 }
 
+/** 一覧表示用: DB 合計を無視し、明細 JSON から再計算（編集画面と揃える） */
+export function quoteGrandTotalFromLines(quote: {
+  legal_items: unknown;
+  service_items: unknown;
+}): number {
+  return quoteTotalsForDisplay({
+    legal_items: quote.legal_items,
+    service_items: quote.service_items,
+    grand_total: null,
+    total_amount: 0,
+  }).grand_total;
+}
+
 /** 編集画面: 明細行から常にライブ集計（DB の 0 円スナップショットに引きずられない） */
 export function quoteTotalsFromLinePayloads(
   legal_items: QuoteLineItem[],

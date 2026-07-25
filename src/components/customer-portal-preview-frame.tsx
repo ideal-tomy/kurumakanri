@@ -31,12 +31,8 @@ export function CustomerPortalPreviewFrame({
           </a>
         </p>
       ) : null}
-      <div className="phone-frame">
-        <div className="phone-screen" style={{ height: 'auto', maxHeight: 640, overflowY: 'auto' }}>
-          <div className="phone-content" style={{ paddingBottom: 24 }}>
-            <CustomerPortalView data={data} preview />
-          </div>
-        </div>
+      <div className="portal-preview-scroll">
+        <CustomerPortalView data={data} preview />
       </div>
     </div>
   );

@@ -277,16 +277,28 @@ export default async function CustomersPage({
           ) : (
             customers.map((row) => {
               const pill = contactPill(row);
-              const sub = row.vehicle_id
-                ? `${row.maker ?? ''} ${row.model ?? ''} ${row.plate ?? ''}`.trim()
+              const plate = row.plate?.trim() || null;
+              const vehicleLabel = row.vehicle_id
+                ? `${row.maker ?? ''} ${row.model ?? ''}`.trim() || '車種不明'
                 : '車両未登録';
+              const hasLine = Boolean(row.line_user_id);
               return (
                 <li key={`${row.customer_id}-${row.vehicle_id ?? 'none'}`} style={{ listStyle: 'none' }}>
                   <Link href={`/customers/${row.customer_id}`} className="customers-compact-row">
                     <div className="customers-compact-avatar">{firstChar(row.name)}</div>
                     <div className="customers-compact-main">
                       <div className="customers-compact-name">{row.name ?? '（無名）'} 様</div>
-                      <div className="customers-compact-sub">{sub}</div>
+                      {plate ? (
+                        <div className="customers-compact-plate">{plate}</div>
+                      ) : (
+                        <div className="customers-compact-plate customers-compact-plate-empty">ナンバー未登録</div>
+                      )}
+                      <div className="customers-compact-sub">
+                        <span className={`customers-compact-line ${hasLine ? 'ok' : 'none'}`}>
+                          {hasLine ? 'LINE済' : 'LINEなし'}
+                        </span>
+                        <span className="customers-compact-vehicle">{vehicleLabel}</span>
+                      </div>
                     </div>
                     <div className={`customers-compact-pill ${pill.level}`}>{pill.text}</div>
                   </Link>

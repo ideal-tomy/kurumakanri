@@ -3,6 +3,11 @@ import { formatDate, formatYen } from '@/lib/format';
 import { QUOTE_SECTION_LABEL } from '@/lib/quote';
 import type { CustomerPortalQuoteSummary } from '@/lib/customer-portal-data';
 
+function shortQuoteNo(quoteNo: string): string {
+  if (quoteNo.length <= 16) return quoteNo;
+  return `${quoteNo.slice(0, 8)}…${quoteNo.slice(-6)}`;
+}
+
 export function PortalQuoteCard({
   quote,
   preview = false,
@@ -29,7 +34,11 @@ export function PortalQuoteCard({
     <div className="quote-card" id="quote">
       <div className="quote-header">
         <div className="quote-title">車検お見積</div>
-        {quote.quote_no ? <div className="quote-id">{quote.quote_no}</div> : null}
+        {quote.quote_no ? (
+          <div className="quote-id" title={quote.quote_no}>
+            {shortQuoteNo(quote.quote_no)}
+          </div>
+        ) : null}
       </div>
 
       {quote.legal_lines.length > 0 ? (
